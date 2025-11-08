@@ -79,6 +79,6 @@ public class SerwerApp {
     http.setExecutor(Executors.newCachedThreadPool());
     http.start();
 
-    System.out.println(String.format("Serwer %d uruchomiony na porcie %d (poczatkowa wartość=%d)", id, port, poczatkowaWartosc));
+    System.out.println(String.format("Serwer %d uruchomiony na porcie %d (poczatkowa wartosc=%d)", id, port, poczatkowaWartosc));
   }
 }

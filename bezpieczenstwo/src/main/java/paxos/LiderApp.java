@@ -40,15 +40,22 @@ public class LiderApp {
           String resp = post(s + "/prepare", String.valueOf(proposalId), 500);
           if (resp == null) continue;
           resp = resp.trim();
+
           if (resp.startsWith("REJECT")) {
-          } else if (resp.startsWith("NONE,")) {
+            System.out.println("[" + s + "] Odrzucono prepare.");
+            continue;
+          }
+
+          if (resp.startsWith("PROMISE,NONE,")) {
+            int val = Integer.parseInt(resp.split(",")[2]);
             promiseCount++;
-            int pv = Integer.parseInt(resp.split(",")[1]);
-            acceptedValuesCount.put(pv, acceptedValuesCount.getOrDefault(pv, 0) + 1);
-          } else if (resp.startsWith("ACCEPTED,")) {
+            acceptedValuesCount.put(val, acceptedValuesCount.getOrDefault(val, 0) + 1);
+            System.out.println("[" + s + "] Obietnica bez wczesniejszej wartosci, wstepna=" + val);
+
+          } else if (resp.startsWith("PROMISE,ACCEPTED,")) {
             String[] parts = resp.split(",");
-            int acceptedId = Integer.parseInt(parts[1]);
-            int val = Integer.parseInt(parts[2]);
+            int acceptedId = Integer.parseInt(parts[2]);
+            int val = Integer.parseInt(parts[3]);
             promiseCount++;
             acceptedValuesCount.put(val, acceptedValuesCount.getOrDefault(val, 0) + 1);
 
@@ -56,13 +63,16 @@ public class LiderApp {
               highestAcceptedId = acceptedId;
               valueFromHighestAccepted = val;
             }
+            System.out.println("[" + s + "] Obietnica z wczesniejsza wartoscia=" + val + " (id=" + acceptedId + ")");
           }
+
         } catch (Exception e) {
+          System.out.println("[" + s + "] Blad prepare: " + e.getMessage());
         }
       }
 
       if (promiseCount < majority) {
-        System.out.println("Brak większości w prepare (" + promiseCount + "/" + servers.size() + "). Ponawiam...");
+        System.out.println("Brak wiekszosci w prepare (" + promiseCount + "/" + servers.size() + "). Ponawiam...");
         TimeUnit.MILLISECONDS.sleep(rand.nextInt(200) + 100);
         continue;
       }
@@ -73,28 +83,43 @@ public class LiderApp {
       } else {
         valueToPropose = acceptedValuesCount.entrySet().stream()
             .max(Map.Entry.comparingByValue())
-            .get()
-            .getKey();
+            .map(Map.Entry::getKey)
+            .orElse(rand.nextInt(10) + 1);
       }
 
-      System.out.println("Wybrana wartość do accept: " + valueToPropose);
+      System.out.println("Wybrana wartosc do akceptacji: " + valueToPropose);
 
       int acceptCount = 0;
       for (String s : servers) {
         try {
           String resp = post(s + "/accept", proposalId + "," + valueToPropose, 500);
-          if (resp != null && resp.trim().equals("OK")) {
+          if (resp != null && resp.startsWith("ACCEPTED")) {
             acceptCount++;
+            System.out.println("[" + s + "] Zaakceptowano wartosc " + valueToPropose);
+          } else {
+            System.out.println("[" + s + "] Odrzucono accept.");
           }
         } catch (Exception e) {
+          System.out.println("[" + s + "] Blad accept: " + e.getMessage());
         }
       }
 
       if (acceptCount >= majority) {
-        System.out.println("Konsensus osiągnięty! Wartość: " + valueToPropose + " zaakceptowana przez " + acceptCount + " serwerów.");
+        System.out.println("\n Wartosc finalna: " + valueToPropose +
+            " zaakceptowana przez " + acceptCount + "/" + servers.size() + " serwerów.");
+
+        for (String s : servers) {
+          try {
+            String state = post(s + "/accepted", "", 500);
+            if (state != null)
+              System.out.println("[" + s + "] Stan koncowy: " + state.trim());
+          } catch (Exception e) {
+            System.out.println("[" + s + "] Blad pobierania stanu: " + e.getMessage());
+          }
+        }
         break;
       } else {
-        System.out.println("Brak większości w fazie accept (" + acceptCount + "/" + servers.size() + "). Ponawiam...");
+        System.out.println("Brak wiekszosci w fazie accept (" + acceptCount + "/" + servers.size() + "). Ponawiam...");
         TimeUnit.MILLISECONDS.sleep(rand.nextInt(200) + 100);
       }
     }
@@ -107,7 +132,11 @@ public class LiderApp {
     conn.setReadTimeout(timeoutMs);
     conn.setRequestMethod("POST");
     conn.setDoOutput(true);
-    conn.getOutputStream().write(body.getBytes());
+
+    if (body != null && !body.isEmpty()) {
+      conn.getOutputStream().write(body.getBytes());
+    }
+
     int respCode = conn.getResponseCode();
     if (respCode != 200) return null;
     InputStream is = conn.getInputStream();

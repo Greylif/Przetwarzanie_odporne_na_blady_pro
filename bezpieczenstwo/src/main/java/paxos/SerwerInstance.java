@@ -18,23 +18,32 @@ public class SerwerInstance {
     this.id = id;
     this.poczatkowaWartosc = new Random().nextInt(10) + 1;
     this.http = HttpServer.create(new InetSocketAddress("localhost", port), 0);
-
+    
     http.createContext("/prepare", exchange -> {
       int proposalId = Integer.parseInt(new String(exchange.getRequestBody().readAllBytes()).trim());
       String response;
+
       synchronized (this) {
         if (proposalId > obiecanyId) {
           obiecanyId = proposalId;
           if (zaakceptowanaWartosc != -1)
-            response = "ACCEPTED," + zaakceptowanyId + "," + zaakceptowanaWartosc;
+            response = "PROMISE,ACCEPTED," + zaakceptowanyId + "," + zaakceptowanaWartosc;
           else
-            response = "NONE," + poczatkowaWartosc;
+            response = "PROMISE,NONE," + poczatkowaWartosc;
         } else {
           response = "REJECT";
         }
       }
+
       exchange.sendResponseHeaders(200, response.length());
       exchange.getResponseBody().write(response.getBytes());
+      exchange.close();
+    });
+
+    http.createContext("/promise", exchange -> {
+      String resp = String.format("PROMISE_STATE,%d,%d,%d", obiecanyId, zaakceptowanyId, zaakceptowanaWartosc);
+      exchange.sendResponseHeaders(200, resp.length());
+      exchange.getResponseBody().write(resp.getBytes());
       exchange.close();
     });
 
@@ -42,20 +51,26 @@ public class SerwerInstance {
       String[] parts = new String(exchange.getRequestBody().readAllBytes()).trim().split(",");
       int proposalId = Integer.parseInt(parts[0]);
       int value = Integer.parseInt(parts[1]);
+      String response;
 
-      boolean accepted;
       synchronized (this) {
         if (proposalId >= obiecanyId) {
           obiecanyId = proposalId;
           zaakceptowanyId = proposalId;
           zaakceptowanaWartosc = value;
-          accepted = true;
+          response = "ACCEPTED," + id + "," + value;
         } else {
-          accepted = false;
+          response = "REJECT";
         }
       }
 
-      String resp = accepted ? "OK" : "REJECT";
+      exchange.sendResponseHeaders(200, response.length());
+      exchange.getResponseBody().write(response.getBytes());
+      exchange.close();
+    });
+
+    http.createContext("/accepted", exchange -> {
+      String resp = String.format("ACCEPTED_STATE,%d,%d,%d", obiecanyId, zaakceptowanyId, zaakceptowanaWartosc);
       exchange.sendResponseHeaders(200, resp.length());
       exchange.getResponseBody().write(resp.getBytes());
       exchange.close();
@@ -66,7 +81,7 @@ public class SerwerInstance {
 
   public void start() {
     http.start();
-    System.out.printf("Serwer %d działa na porcie %d (początkowa wartość=%d)%n",
+    System.out.printf("Serwer %d dziala na porcie %d (poczatkowa wartosc=%d)%n",
         id, ((InetSocketAddress) http.getAddress()).getPort(), poczatkowaWartosc);
   }
 }

@@ -21,7 +21,7 @@ public class Launcher {
     }
 
     System.out.println("Wszystkie serwery uruchomione.");
-    System.out.println("Teraz możesz uruchomić lidera osobno komendą:");
+    System.out.println("Teraz mozesz uruchomic lidera osobno komenda:");
     System.out.println("java paxos.LiderApp 0");
     System.out.println("lub automatycznie za 2 sekundy...");
 
