@@ -5,11 +5,12 @@ public class Launcher {
     int numServers = 8;
     int basePort = 8000;
 
-    System.out.println("Uruchamianie " + numServers + " serwerów Paxos...");
+    System.out.println("Uruchamianie " + numServers + " serwerów Paxos (z liderem na porcie 8000)...");
 
     for (int i = 0; i < numServers; i++) {
       final int id = i;
       final int port = basePort + i;
+      final boolean isLeader = (i == 0);
       new Thread(() -> {
         try {
           SerwerInstance s = new SerwerInstance(id, port);
@@ -19,20 +20,5 @@ public class Launcher {
         }
       }, "Server-" + i).start();
     }
-
-    System.out.println("Wszystkie serwery uruchomione.");
-    System.out.println("Teraz mozesz uruchomic lidera osobno komenda:");
-    System.out.println("java paxos.LiderApp 0");
-    System.out.println("lub automatycznie za 2 sekundy...");
-
-    Thread.sleep(2000);
-
-    new Thread(() -> {
-      try {
-        LiderApp.main(new String[]{"0"});
-      } catch (Exception e) {
-        e.printStackTrace();
-      }
-    }, "Leader").start();
   }
 }
