@@ -6,15 +6,16 @@ import org.springframework.web.client.RestTemplate;
 public class HttpUtil {
 
   private static final RestTemplate rest = new RestTemplate();
-
-  public static String post(String url, String body, int timeoutMs) {
+  
+  public static String postParams(String url) {
     try {
       HttpHeaders headers = new HttpHeaders();
       headers.setContentType(MediaType.TEXT_PLAIN);
-      HttpEntity<String> e = new HttpEntity<>(body, headers);
+      HttpEntity<String> entity = new HttpEntity<>("", headers);
 
-      ResponseEntity<String> resp = rest.exchange(url, HttpMethod.POST, e, String.class);
+      ResponseEntity<String> resp = rest.exchange(url, HttpMethod.POST, entity, String.class);
       return resp.getBody();
+
     } catch (Exception e) {
       return null;
     }

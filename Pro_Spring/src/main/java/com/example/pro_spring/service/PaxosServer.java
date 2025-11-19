@@ -62,10 +62,14 @@ public class PaxosServer {
     System.out.printf("== SERVER %d STARTED on port %d (leader=%d)==%n", id, port, leaderPort);
   }
 
-  
+  public synchronized void injectPromised(int x) { promisedProposal = x; }
+  public synchronized void injectAcceptedProposal(int x) { acceptedProposal = x; }
+  public synchronized void injectAcceptedValue(int x) { acceptedValue = x; }
+
   @Scheduled(fixedDelay = 3000)
   public void watcher() {
     if (!running) return;
+
     if (getLeaderPort() == port) return;
 
     if (!isAlive("http://localhost:" + getLeaderPort())) {
@@ -80,8 +84,8 @@ public class PaxosServer {
 
     for (String s : SERVERS) {
       try {
-        String resp = HttpUtil.post(s + "/election", "", 300);
-        if (resp != null) ports.add(Integer.parseInt(resp));
+        String resp = HttpUtil.postParams(s + "/election");
+        if (resp != null) ports.add(Integer.parseInt(resp.trim()));
       } catch (Exception ignored) {}
     }
 
@@ -93,8 +97,14 @@ public class PaxosServer {
 
   public void crash() {
     running = false;
-    System.out.printf("[SERVER %d] !! CRASHING !!%n", port);
-    ctx.close();
+    System.out.printf("[SERVER %d] Crash scheduled in 300ms%n", port);
+
+    new Thread(() -> {
+      try { Thread.sleep(300); } catch (Exception ignored) {}
+      try {
+        ctx.close();
+      } catch (Exception ignored) {}
+    }).start();
   }
 
   public void startPaxos(int value) {
@@ -110,7 +120,7 @@ public class PaxosServer {
         port, proposalId, clientValue);
 
     List<String> alive = collectAlive();
-    int majority = alive.size() / 2 + 1;
+    int majority = 5;
 
     System.out.printf("[LIDER %d] ALIVE SERVERS (%d): %s%n",
         port, alive.size(), alive);
@@ -123,7 +133,7 @@ public class PaxosServer {
       executor.submit(() -> {
         try {
           System.out.printf("[LIDER %d] -> PREPARE to %s%n", port, s);
-          String resp = HttpUtil.post(s + "/prepare", String.valueOf(proposalId), 1200);
+          String resp = HttpUtil.postParams(s + "/prepare?proposalId=" + proposalId);
 
           if (resp != null) {
             System.out.printf("[LIDER %d] <- %s RESPONSE: %s%n", port, s, resp);
@@ -137,6 +147,8 @@ public class PaxosServer {
                 promises.add(new Promise(true, -1, -1));
               }
             }
+          } else {
+            System.out.printf("[LIDER %d] <- %s NO RESPONSE (treated as down)%n", port, s);
           }
         } catch (Exception ignored) {}
         latch1.countDown();
@@ -152,7 +164,7 @@ public class PaxosServer {
             .toList());
 
     if (promises.size() < majority) {
-      System.out.printf("[LIDER %d] NO MAJORITY in PREPARE%n", port);
+      System.out.printf("[LIDER %d] NO MAJORITY in PREPARE (%d/%d)%n", port, promises.size(), majority);
       return;
     }
 
@@ -173,15 +185,15 @@ public class PaxosServer {
       executor.submit(() -> {
         try {
           System.out.printf("[LIDER %d] -> ACCEPT to %s%n", port, s);
-          String resp = HttpUtil.post(
-              s + "/accept",
-              proposalId + "," + valueToPropose,
-              1200
+          String resp = HttpUtil.postParams(
+              s + "/accept?proposalId=" + proposalId + "&value=" + valueToPropose
           );
 
           if (resp != null) {
             System.out.printf("[LIDER %d] <- %s RESPONSE: %s%n", port, s, resp);
             if (resp.startsWith("ACCEPTED")) accepts.add(true);
+          } else {
+            System.out.printf("[LIDER %d] <- %s NO RESPONSE on ACCEPT (treated as down)%n", port, s);
           }
 
         } catch (Exception ignored) {}
@@ -199,7 +211,6 @@ public class PaxosServer {
     else
       System.out.printf("[LIDER %d] NO MAJORITY in ACCEPT%n", port);
   }
-
 
   public synchronized String prepare(long proposalId) {
     if (!running) return null;
@@ -224,35 +235,32 @@ public class PaxosServer {
     return "REJECT";
   }
 
-
   public synchronized String accept(long proposalId, int value) {
     if (!running) return null;
 
-    System.out.printf("[SERVER %d] <- ACCEPT proposalId=%d value=%d%n",
-        port, proposalId, value);
+    if (Math.random() < 0.9) {
+      System.out.printf("[SERVER %d] Brak odpowiedzi - symulacjia awarii komunikacji %n", port);
+      return null;
+    }
+
+    System.out.printf("[SERVER %d] <- ACCEPT proposalId=%d value=%d%n", port, proposalId, value);
 
     if (proposalId >= promisedProposal) {
       promisedProposal = (int) proposalId;
       acceptedProposal = (int) proposalId;
       acceptedValue = value;
 
-      System.out.printf("[SERVER %d] -> ACCEPTED (%d,%d)%n",
-          port, acceptedProposal, acceptedValue);
+      System.out.printf("[SERVER %d] -> ACCEPTED (%d,%d)%n", port, acceptedProposal, acceptedValue);
 
       return "ACCEPTED," + proposalId + "," + value;
     }
 
-    System.out.printf("[SERVER %d] -> REJECT (promised=%d)%n",
-        port, promisedProposal);
+    System.out.printf("[SERVER %d] -> REJECT (promised=%d)%n", port, promisedProposal);
 
     return "REJECT," + proposalId + "," + value;
   }
 
-
   public synchronized String state() {
-    System.out.printf("[SERVER %d] STATE_REQ => (%d,%d,%d)%n",
-        port, promisedProposal, acceptedProposal, acceptedValue);
-
     return "STATE," + promisedProposal + "," +
         acceptedProposal + "," +
         acceptedValue;
@@ -268,7 +276,7 @@ public class PaxosServer {
 
   private static boolean isAlive(String url) {
     try {
-      String resp = HttpUtil.post(url + "/accepted_state", "", 300);
+      String resp = HttpUtil.postParams(url + "/accepted_state");
       return resp != null && resp.startsWith("STATE");
     } catch (Exception e) {
       return false;
