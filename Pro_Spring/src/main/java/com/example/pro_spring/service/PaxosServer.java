@@ -59,7 +59,7 @@ public class PaxosServer {
     this.ctx = ctx;
     leaderPort = leader;
 
-    System.out.printf("== SERVER %d STARTED on port %d (leader=%d)==%n", id, port, leaderPort);
+    System.out.printf(" SERVER %d Wlaczony na porcie %d (leader=%d) %n", id, port, leaderPort);
   }
 
   public synchronized void injectPromised(int x) { promisedProposal = x; }
@@ -73,7 +73,7 @@ public class PaxosServer {
     if (getLeaderPort() == port) return;
 
     if (!isAlive("http://localhost:" + getLeaderPort())) {
-      System.out.printf("[SERVER %d] Leader %d unreachable — starting election%n", port, getLeaderPort());
+      System.out.printf("[SERVER %d] Leader %d jest nieosiagalny - poczatek elekcji %n", port, getLeaderPort());
       electNewLeader();
     }
   }
@@ -92,12 +92,12 @@ public class PaxosServer {
     int winner = ports.stream().min(Integer::compare).orElse(port);
     setLeaderPort(winner);
 
-    System.out.printf("[SERVER %d] NEW LEADER ELECTED = %d%n", port, winner);
+    System.out.printf("[SERVER %d] Nowy leader wybrany = %d%n", port, winner);
   }
 
   public void crash() {
     running = false;
-    System.out.printf("[SERVER %d] Crash scheduled in 300ms%n", port);
+    System.out.printf("[SERVER %d] Crash za 300ms%n", port);
 
     new Thread(() -> {
       try { Thread.sleep(300); } catch (Exception ignored) {}
@@ -113,16 +113,15 @@ public class PaxosServer {
 
   private void runPaxosRound(int clientValue) {
 
-    long proposalId = (System.currentTimeMillis() & 0xFFFFFFF) * 100 + id;
+    long proposalId = (System.currentTimeMillis() & 0xFFFFFFF) + id;
 
-    System.out.printf("%n[LIDER %d] ===== PAXOS ROUND START =====%n", port);
-    System.out.printf("[LIDER %d] proposalId=%d, clientValue=%d%n",
-        port, proposalId, clientValue);
+    System.out.printf("%n[LIDER %d] Poczatek rundy paxosa %n", port);
+    System.out.printf("[LIDER %d] proposalId=%d, clientValue=%d%n", port, proposalId, clientValue);
 
     List<String> alive = collectAlive();
     int majority = 5;
 
-    System.out.printf("[LIDER %d] ALIVE SERVERS (%d): %s%n",
+    System.out.printf("[LIDER %d] Dzialajace serwery (%d): %s%n",
         port, alive.size(), alive);
 
     // PHASE 1 — PREPARE
@@ -130,25 +129,27 @@ public class PaxosServer {
     CountDownLatch latch1 = new CountDownLatch(alive.size());
 
     for (String s : alive) {
+      if (Math.random() < 0.05) {
+        System.out.printf("[SERVER %d] Brak wyslania - symulacjia awarii komunikacji w prepare %n", port);
+        continue;
+      }
       executor.submit(() -> {
         try {
-          System.out.printf("[LIDER %d] -> PREPARE to %s%n", port, s);
+          System.out.printf("[LIDER %d] -> PREPARE dla %s%n", port, s);
           String resp = HttpUtil.postParams(s + "/prepare?proposalId=" + proposalId);
 
           if (resp != null) {
             System.out.printf("[LIDER %d] <- %s RESPONSE: %s%n", port, s, resp);
-            if (resp.startsWith("PROMISE")) {
+            if (resp.startsWith("PREPARED")) {
               String[] p = resp.split(",");
               if (p.length == 3 && !"NONE".equals(p[1])) {
-                promises.add(new Promise(true,
-                    Integer.parseInt(p[1]),
-                    Integer.parseInt(p[2])));
+                promises.add(new Promise(true, Integer.parseInt(p[1]), Integer.parseInt(p[2])));
               } else {
                 promises.add(new Promise(true, -1, -1));
               }
             }
           } else {
-            System.out.printf("[LIDER %d] <- %s NO RESPONSE (treated as down)%n", port, s);
+            System.out.printf("[LIDER %d] <- %s Brak odpowiedzi %n", port, s);
           }
         } catch (Exception ignored) {}
         latch1.countDown();
@@ -157,14 +158,12 @@ public class PaxosServer {
 
     try { latch1.await(); } catch (Exception ignored) {}
 
-    System.out.printf("[LIDER %d] PROMISES RECEIVED: %s%n",
-        port,
-        promises.stream()
+    System.out.printf("[LIDER %d] Otrzymane PROMISE: %s%n", port, promises.stream()
             .map(p -> "(" + p.acceptedProposal + "," + p.acceptedValue + ")")
             .toList());
 
     if (promises.size() < majority) {
-      System.out.printf("[LIDER %d] NO MAJORITY in PREPARE (%d/%d)%n", port, promises.size(), majority);
+      System.out.printf("[LIDER %d] Brak wiekszosci w PREPARE (%d/%d)%n", port, promises.size(), majority);
       return;
     }
 
@@ -175,16 +174,20 @@ public class PaxosServer {
             .map(p -> p.acceptedValue)
             .orElse(clientValue);
 
-    System.out.printf("[LIDER %d] FINAL VALUE = %d%n", port, valueToPropose);
+    System.out.printf("[LIDER %d] Ustalona wartosc = %d%n", port, valueToPropose);
 
     // PHASE 2 — ACCEPT
     CountDownLatch latch2 = new CountDownLatch(alive.size());
     List<Boolean> accepts = Collections.synchronizedList(new ArrayList<>());
 
     for (String s : alive) {
+      if (Math.random() < 0.05) {
+        System.out.printf("[SERVER %d] Brak wyslania - symulacjia awarii komunikacji w accept %n", port);
+        continue;
+      }
       executor.submit(() -> {
         try {
-          System.out.printf("[LIDER %d] -> ACCEPT to %s%n", port, s);
+          System.out.printf("[LIDER %d] -> ACCEPT do %s, %d %n", port, s, valueToPropose);
           String resp = HttpUtil.postParams(
               s + "/accept?proposalId=" + proposalId + "&value=" + valueToPropose
           );
@@ -193,7 +196,7 @@ public class PaxosServer {
             System.out.printf("[LIDER %d] <- %s RESPONSE: %s%n", port, s, resp);
             if (resp.startsWith("ACCEPTED")) accepts.add(true);
           } else {
-            System.out.printf("[LIDER %d] <- %s NO RESPONSE on ACCEPT (treated as down)%n", port, s);
+            System.out.printf("[LIDER %d] <- %s Brak odpowiedzi dla ACCEPT %n", port, s);
           }
 
         } catch (Exception ignored) {}
@@ -203,13 +206,12 @@ public class PaxosServer {
 
     try { latch2.await(); } catch (Exception ignored) {}
 
-    System.out.printf("[LIDER %d] ACCEPT COUNT = %d (majority=%d)%n",
-        port, accepts.size(), majority);
+    System.out.printf("[LIDER %d] Ilosc otrzymanych ACCEPT = %d (majority=%d)%n", port, accepts.size(), majority);
 
     if (accepts.size() >= majority)
-      System.out.printf("[LIDER %d] VALUE DECIDED = %d%n", port, valueToPropose);
+      System.out.printf("[LIDER %d] Finalna, ustalona wartosc = %d%n", port, valueToPropose);
     else
-      System.out.printf("[LIDER %d] NO MAJORITY in ACCEPT%n", port);
+      System.out.printf("[LIDER %d] Brak wiekszosci w ACCEPT%n", port);
   }
 
   public synchronized String prepare(long proposalId) {
@@ -217,20 +219,25 @@ public class PaxosServer {
 
     System.out.printf("[SERVER %d] <- PREPARE proposalId=%d%n", port, proposalId);
 
+
+    if (Math.random() < 0.05) {
+      System.out.printf("[SERVER %d] Brak odpowiedzi - symulacjia awarii komunikacji w prepared %n", port);
+      return null;
+    }
+
     if (proposalId > promisedProposal) {
-      System.out.printf("[SERVER %d] -> PROMISE (accepted=(%d,%d))%n",
-          port, acceptedProposal, acceptedValue);
+
+      System.out.printf("[SERVER %d] -> PREPARED (accepted=(%d,%d))%n", port, acceptedProposal, acceptedValue);
 
       promisedProposal = (int) proposalId;
 
       if (acceptedProposal != -1)
-        return "PROMISE," + acceptedProposal + "," + acceptedValue;
+        return "PREPARED," + acceptedProposal + "," + acceptedValue;
       else
-        return "PROMISE,NONE";
+        return "PREPARED,NONE";
     }
 
-    System.out.printf("[SERVER %d] -> REJECT (promised=%d)%n",
-        port, promisedProposal);
+    System.out.printf("[SERVER %d] -> REJECT (promised=%d)%n", port, promisedProposal);
 
     return "REJECT";
   }
@@ -238,8 +245,8 @@ public class PaxosServer {
   public synchronized String accept(long proposalId, int value) {
     if (!running) return null;
 
-    if (Math.random() < 0.9) {
-      System.out.printf("[SERVER %d] Brak odpowiedzi - symulacjia awarii komunikacji %n", port);
+    if (Math.random() < 0.05) {
+      System.out.printf("[SERVER %d] Brak odpowiedzi - symulacjia awarii komunikacji w accepted %n", port);
       return null;
     }
 
@@ -261,9 +268,7 @@ public class PaxosServer {
   }
 
   public synchronized String state() {
-    return "STATE," + promisedProposal + "," +
-        acceptedProposal + "," +
-        acceptedValue;
+    return "STATE," + promisedProposal + "," + acceptedProposal + "," + acceptedValue;
   }
 
   public synchronized void clear() {
@@ -271,7 +276,7 @@ public class PaxosServer {
     acceptedProposal = -1;
     acceptedValue = -1;
 
-    System.out.printf("[SERVER %d] STATE CLEARED%n", port);
+    System.out.printf("[SERVER %d] Wyczyszczono dane %n", port);
   }
 
   private static boolean isAlive(String url) {
