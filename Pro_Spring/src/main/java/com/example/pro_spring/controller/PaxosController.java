@@ -1,10 +1,11 @@
 package com.example.pro_spring.controller;
 
-import org.springframework.web.bind.annotation.*;
 import com.example.pro_spring.service.PaxosServer;
 import com.example.pro_spring.util.HttpUtil;
-
-import java.util.*;
+import java.util.List;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 public class PaxosController {
@@ -19,8 +20,9 @@ public class PaxosController {
   @PostMapping("/client_propose")
   public String propose(@RequestParam Integer value) {
 
-    if (PaxosServer.getLeaderPort() != server.getPort())
+    if (PaxosServer.getLeaderPort() != server.getPort()) {
       return "NOT_LEADER," + PaxosServer.getLeaderPort();
+    }
 
     server.startPaxos(value);
     return "OK: proposal started by leader on port " + server.getPort();
@@ -64,8 +66,9 @@ public class PaxosController {
 
   @PostMapping("/clearall")
   public String clearAll() {
-    if (PaxosServer.getLeaderPort() != server.getPort())
+    if (PaxosServer.getLeaderPort() != server.getPort()) {
       return "NOT_LEADER," + PaxosServer.getLeaderPort();
+    }
 
     List<String> servers = List.of(
         "http://localhost:8000",
@@ -84,7 +87,9 @@ public class PaxosController {
     for (String s : servers) {
       String resp = HttpUtil.postParams(s + "/clear");
       sb.append(s).append(" => ").append(resp).append("\n");
-      if (resp != null) count++;
+      if (resp != null) {
+        count++;
+      }
     }
 
     return "CLEARED: " + count + "\n" + sb;
@@ -98,9 +103,15 @@ public class PaxosController {
       @RequestParam(required = false) Integer acceptedValue
   ) {
 
-    if (promised != null) server.injectPromised(promised);
-    if (acceptedProposal != null) server.injectAcceptedProposal(acceptedProposal);
-    if (acceptedValue != null) server.injectAcceptedValue(acceptedValue);
+    if (promised != null) {
+      server.injectPromised(promised);
+    }
+    if (acceptedProposal != null) {
+      server.injectAcceptedProposal(acceptedProposal);
+    }
+    if (acceptedValue != null) {
+      server.injectAcceptedValue(acceptedValue);
+    }
 
     return "INJECT_OK";
   }

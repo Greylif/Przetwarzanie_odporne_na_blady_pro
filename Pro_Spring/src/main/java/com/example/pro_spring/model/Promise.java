@@ -1,6 +1,7 @@
 package com.example.pro_spring.model;
 
 public class Promise {
+
   public boolean promised;
   public int acceptedProposal;
   public int acceptedValue;
