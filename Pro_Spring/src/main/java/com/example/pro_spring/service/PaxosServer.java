@@ -5,7 +5,9 @@ import com.example.pro_spring.util.HttpUtil;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import lombok.Getter;
 import org.springframework.beans.factory.annotation.Value;
@@ -27,7 +29,9 @@ public class PaxosServer {
       "http://localhost:8006",
       "http://localhost:8007"
   );
+
   private static volatile int leaderPort;
+
   @Getter
   private final int id;
   @Getter
@@ -35,9 +39,14 @@ public class PaxosServer {
   private final ThreadPoolTaskExecutor executor;
   private final ConfigurableApplicationContext ctx;
   private volatile boolean running = true;
+
   private int promisedProposal = -1;
   private int acceptedProposal = -1;
   private int acceptedValue = -1;
+
+  private int prevPromisedProposal = -1;
+  private int prevAcceptedProposal = -1;
+  private int prevAcceptedValue = -1;
 
   public PaxosServer(
       @Value("${server.port}") int port,
@@ -74,14 +83,17 @@ public class PaxosServer {
 
   public synchronized void injectPromised(int x) {
     promisedProposal = x;
+    System.out.printf("[SERVER %d] INJECT promised=%d%n", port, x);
   }
 
   public synchronized void injectAcceptedProposal(int x) {
     acceptedProposal = x;
+    System.out.printf("[SERVER %d] INJECT acceptedProposal=%d%n", port, x);
   }
 
   public synchronized void injectAcceptedValue(int x) {
     acceptedValue = x;
+    System.out.printf("[SERVER %d] INJECT acceptedValue=%d%n", port, x);
   }
 
   @Scheduled(fixedDelay = 3000)
@@ -141,9 +153,34 @@ public class PaxosServer {
     executor.submit(() -> runPaxosRound(value));
   }
 
+  private synchronized void savePrevState() {
+    prevPromisedProposal = promisedProposal;
+    prevAcceptedProposal = acceptedProposal;
+    prevAcceptedValue = acceptedValue;
+  }
+
+  public synchronized void rollback() {
+    promisedProposal = prevPromisedProposal;
+    acceptedProposal = prevAcceptedProposal;
+    acceptedValue = prevAcceptedValue;
+    System.out.printf("[SERVER %d] ROLLBACK -> (%d,%d,%d)%n",
+        port, promisedProposal, acceptedProposal, acceptedValue);
+  }
+
+  private void rollbackAll(List<String> servers) {
+    for (String s : servers) {
+      executor.submit(() -> {
+        try {
+          String resp = HttpUtil.postParams(s + "/rollback");
+          System.out.printf("[LIDER %d] -> ROLLBACK wyslany do %s => %s%n", port, s, resp);
+        } catch (Exception ignored) {}
+      });
+    }
+  }
+
   private void runPaxosRound(int clientValue) {
 
-    long proposalId = (System.currentTimeMillis() & 0xFFFFFFF) + id;
+    long proposalId = (System.currentTimeMillis() & 0xFFFFFFF) * 100 + id;
 
     System.out.printf("%n[LIDER %d] Poczatek rundy paxosa %n", port);
     System.out.printf("[LIDER %d] proposalId=%d, clientValue=%d%n", port, proposalId, clientValue);
@@ -153,16 +190,24 @@ public class PaxosServer {
     System.out.printf("[LIDER %d] Dzialajace serwery (%d): %s%n",
         port, alive.size(), alive);
 
+    if (alive.isEmpty()) {
+      System.out.printf("[LIDER %d] Brak zywych serwerow - koniec%n", port);
+      return;
+    }
+
+    int majority = alive.size() / 2 + 1;
+
     // PHASE 1 — PREPARE
     List<Promise> promises = Collections.synchronizedList(new ArrayList<>());
     CountDownLatch latch1 = new CountDownLatch(alive.size());
 
     for (String s : alive) {
       if (Math.random() < 0.05) {
-        System.out.printf("[SERVER %d] Brak wyslania - symulacjia awarii komunikacji w prepare %n",
-            port);
+        System.out.printf("[LIDER %d] Brak wyslania - symulacjia awarii komunikacji do %s w PREPARE %n", port, s);
+        latch1.countDown();
         continue;
       }
+
       executor.submit(() -> {
         try {
           System.out.printf("[LIDER %d] -> PREPARE dla %s%n", port, s);
@@ -170,20 +215,22 @@ public class PaxosServer {
 
           if (resp != null) {
             System.out.printf("[LIDER %d] <- %s RESPONSE: %s%n", port, s, resp);
-            if (resp.startsWith("PREPARED")) {
+            if (resp.startsWith("PROMISE") || resp.startsWith("PREPARED")) {
               String[] p = resp.split(",");
               if (p.length == 3 && !"NONE".equals(p[1])) {
                 promises.add(new Promise(true, Integer.parseInt(p[1]), Integer.parseInt(p[2])));
               } else {
                 promises.add(new Promise(true, -1, -1));
               }
+            } else if (resp.startsWith("REJECT")) {
             }
           } else {
-            System.out.printf("[LIDER %d] <- %s Brak odpowiedzi %n", port, s);
+            System.out.printf("[LIDER %d] <- %s Brak odpowiedzi w PREPARE (treated as down)%n", port, s);
           }
         } catch (Exception ignored) {
+        } finally {
+          latch1.countDown();
         }
-        latch1.countDown();
       });
     }
 
@@ -196,21 +243,39 @@ public class PaxosServer {
         .map(p -> "(" + p.acceptedProposal + "," + p.acceptedValue + ")")
         .toList());
 
-    int majority = 5;
     if (promises.size() < majority) {
-      System.out.printf("[LIDER %d] Brak wiekszosci w PREPARE (%d/%d)%n", port, promises.size(),
-          majority);
+      System.out.printf("[LIDER %d] Brak wiekszosci w PREPARE (%d/%d) — ROLLBACK%n", port, promises.size(), majority);
+      rollbackAll(alive);
       return;
     }
 
-    int valueToPropose =
-        promises.stream()
-            .filter(p -> p.acceptedProposal >= 0)
-            .max(Comparator.comparingInt(p -> p.acceptedProposal))
-            .map(p -> p.acceptedValue)
-            .orElse(clientValue);
+    Map<Integer, Integer> counts = new HashMap<>();
+    for (Promise p : promises) {
+      int val = p.acceptedProposal >= 0 ? p.acceptedValue : -1;
+      counts.put(val, counts.getOrDefault(val, 0) + 1);
+    }
 
-    System.out.printf("[LIDER %d] Ustalona wartosc = %d%n", port, valueToPropose);
+    boolean hasMaj = false;
+    int chosenValue = clientValue;
+    for (Map.Entry<Integer, Integer> e : counts.entrySet()) {
+      if (e.getValue() >= majority) {
+        hasMaj = true;
+        if (e.getKey() == -1) {
+          chosenValue = clientValue;
+        } else {
+          chosenValue = e.getKey();
+        }
+        break;
+      }
+    }
+
+    if (!hasMaj) {
+      System.out.printf("[LIDER %d] Brak większości na żadną wartość w PROMISES — ROLLBACK%n", port);
+      rollbackAll(alive);
+      return;
+    }
+
+    System.out.printf("[LIDER %d] Ustalona wartosc (na podstawie wiekszosci) = %d%n", port, chosenValue);
 
     // PHASE 2 — ACCEPT
     CountDownLatch latch2 = new CountDownLatch(alive.size());
@@ -218,15 +283,17 @@ public class PaxosServer {
 
     for (String s : alive) {
       if (Math.random() < 0.05) {
-        System.out.printf("[SERVER %d] Brak wyslania - symulacjia awarii komunikacji w accept %n",
-            port);
+        System.out.printf("[LIDER %d] Brak wyslania - symulacjia awarii komunikacji do %s w ACCEPT %n", port, s);
+        latch2.countDown();
         continue;
       }
+
+      int finalChosenValue = chosenValue;
       executor.submit(() -> {
         try {
-          System.out.printf("[LIDER %d] -> ACCEPT do %s, %d %n", port, s, valueToPropose);
+          System.out.printf("[LIDER %d] -> ACCEPT do %s, %d %n", port, s, finalChosenValue);
           String resp = HttpUtil.postParams(
-              s + "/accept?proposalId=" + proposalId + "&value=" + valueToPropose
+              s + "/accept?proposalId=" + proposalId + "&value=" + finalChosenValue
           );
 
           if (resp != null) {
@@ -235,12 +302,13 @@ public class PaxosServer {
               accepts.add(true);
             }
           } else {
-            System.out.printf("[LIDER %d] <- %s Brak odpowiedzi dla ACCEPT %n", port, s);
+            System.out.printf("[LIDER %d] <- %s Brak odpowiedzi dla ACCEPT (treated as down)%n", port, s);
           }
 
         } catch (Exception ignored) {
+        } finally {
+          latch2.countDown();
         }
-        latch2.countDown();
       });
     }
 
@@ -253,9 +321,10 @@ public class PaxosServer {
         accepts.size(), majority);
 
     if (accepts.size() >= majority) {
-      System.out.printf("[LIDER %d] Finalna, ustalona wartosc = %d%n", port, valueToPropose);
+      System.out.printf("[LIDER %d] Finalna, ustalona wartosc = %d%n", port, chosenValue);
     } else {
-      System.out.printf("[LIDER %d] Brak wiekszosci w ACCEPT%n", port);
+      System.out.printf("[LIDER %d] Brak wiekszosci w ACCEPT — ROLLBACK%n", port);
+      rollbackAll(alive);
     }
   }
 
@@ -267,22 +336,22 @@ public class PaxosServer {
     System.out.printf("[SERVER %d] <- PREPARE proposalId=%d%n", port, proposalId);
 
     if (Math.random() < 0.05) {
-      System.out.printf("[SERVER %d] Brak odpowiedzi - symulacjia awarii komunikacji w prepared %n",
-          port);
+      System.out.printf("[SERVER %d] Brak odpowiedzi - symulacja awarii komunikacji w PREPARE %n", port);
       return null;
     }
 
     if (proposalId > promisedProposal) {
+      savePrevState();
 
-      System.out.printf("[SERVER %d] -> PREPARED (accepted=(%d,%d))%n", port, acceptedProposal,
+      System.out.printf("[SERVER %d] -> PROMISE (accepted=(%d,%d))%n", port, acceptedProposal,
           acceptedValue);
 
       promisedProposal = (int) proposalId;
 
       if (acceptedProposal != -1) {
-        return "PREPARED," + acceptedProposal + "," + acceptedValue;
+        return "PROMISE," + acceptedProposal + "," + acceptedValue;
       } else {
-        return "PREPARED,NONE";
+        return "PROMISE,NONE";
       }
     }
 
@@ -297,14 +366,15 @@ public class PaxosServer {
     }
 
     if (Math.random() < 0.05) {
-      System.out.printf("[SERVER %d] Brak odpowiedzi - symulacjia awarii komunikacji w accepted %n",
-          port);
+      System.out.printf("[SERVER %d] Brak odpowiedzi - symulacja awarii komunikacji w ACCEPT %n", port);
       return null;
     }
 
     System.out.printf("[SERVER %d] <- ACCEPT proposalId=%d value=%d%n", port, proposalId, value);
 
     if (proposalId >= promisedProposal) {
+      savePrevState();
+
       promisedProposal = (int) proposalId;
       acceptedProposal = (int) proposalId;
       acceptedValue = value;
@@ -327,6 +397,10 @@ public class PaxosServer {
     promisedProposal = -1;
     acceptedProposal = -1;
     acceptedValue = -1;
+
+    prevPromisedProposal = -1;
+    prevAcceptedProposal = -1;
+    prevAcceptedValue = -1;
 
     System.out.printf("[SERVER %d] Wyczyszczono dane %n", port);
   }

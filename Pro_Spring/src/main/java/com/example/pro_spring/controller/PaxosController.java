@@ -16,18 +16,14 @@ public class PaxosController {
     this.server = server;
   }
 
-
   @PostMapping("/client_propose")
   public String propose(@RequestParam Integer value) {
-
     if (PaxosServer.getLeaderPort() != server.getPort()) {
       return "NOT_LEADER," + PaxosServer.getLeaderPort();
     }
-
     server.startPaxos(value);
     return "OK: proposal started by leader on port " + server.getPort();
   }
-
 
   @PostMapping("/prepare")
   public String prepare(@RequestParam long proposalId) {
@@ -37,7 +33,6 @@ public class PaxosController {
   @PostMapping("/accept")
   public String accept(@RequestParam long proposalId,
       @RequestParam int value) {
-
     return server.accept(proposalId, value);
   }
 
@@ -50,7 +45,6 @@ public class PaxosController {
   public String election() {
     return String.valueOf(server.getPort());
   }
-
 
   @PostMapping("/crash")
   public String crash() {
@@ -95,7 +89,6 @@ public class PaxosController {
     return "CLEARED: " + count + "\n" + sb;
   }
 
-
   @PostMapping("/inject")
   public String inject(
       @RequestParam(required = false) Integer promised,
@@ -114,5 +107,11 @@ public class PaxosController {
     }
 
     return "INJECT_OK";
+  }
+
+  @PostMapping("/rollback")
+  public String rollback() {
+    server.rollback();
+    return "ROLLED_BACK";
   }
 }
