@@ -30,6 +30,8 @@ public class PaxosServer {
       "http://localhost:8007"
   );
 
+  private static final double FAIL_CHANCE = 0.00;
+  
   private static volatile int leaderPort;
 
   @Getter
@@ -180,7 +182,7 @@ public class PaxosServer {
 
   private void runPaxosRound(int clientValue) {
 
-    long proposalId = (System.currentTimeMillis() & 0xFFFFFFF) * 100 + id;
+    long proposalId = (System.currentTimeMillis() & 0xFFFFFFF) + id;
 
     System.out.printf("%n[LIDER %d] Poczatek rundy paxosa %n", port);
     System.out.printf("[LIDER %d] proposalId=%d, clientValue=%d%n", port, proposalId, clientValue);
@@ -202,7 +204,7 @@ public class PaxosServer {
     CountDownLatch latch1 = new CountDownLatch(alive.size());
 
     for (String s : alive) {
-      if (Math.random() < 0.05) {
+      if (Math.random() < FAIL_CHANCE) {
         System.out.printf("[LIDER %d] Brak wyslania - symulacjia awarii komunikacji do %s w PREPARE %n", port, s);
         latch1.countDown();
         continue;
@@ -215,7 +217,7 @@ public class PaxosServer {
 
           if (resp != null) {
             System.out.printf("[LIDER %d] <- %s RESPONSE: %s%n", port, s, resp);
-            if (resp.startsWith("PROMISE") || resp.startsWith("PREPARED")) {
+            if (resp.startsWith("PROMISE")) {
               String[] p = resp.split(",");
               if (p.length == 3 && !"NONE".equals(p[1])) {
                 promises.add(new Promise(true, Integer.parseInt(p[1]), Integer.parseInt(p[2])));
@@ -282,7 +284,7 @@ public class PaxosServer {
     List<Boolean> accepts = Collections.synchronizedList(new ArrayList<>());
 
     for (String s : alive) {
-      if (Math.random() < 0.05) {
+      if (Math.random() < FAIL_CHANCE) {
         System.out.printf("[LIDER %d] Brak wyslania - symulacjia awarii komunikacji do %s w ACCEPT %n", port, s);
         latch2.countDown();
         continue;
@@ -335,7 +337,7 @@ public class PaxosServer {
 
     System.out.printf("[SERVER %d] <- PREPARE proposalId=%d%n", port, proposalId);
 
-    if (Math.random() < 0.05) {
+    if (Math.random() < FAIL_CHANCE) {
       System.out.printf("[SERVER %d] Brak odpowiedzi - symulacja awarii komunikacji w PREPARE %n", port);
       return null;
     }
@@ -365,7 +367,7 @@ public class PaxosServer {
       return null;
     }
 
-    if (Math.random() < 0.05) {
+    if (Math.random() < FAIL_CHANCE) {
       System.out.printf("[SERVER %d] Brak odpowiedzi - symulacja awarii komunikacji w ACCEPT %n", port);
       return null;
     }
