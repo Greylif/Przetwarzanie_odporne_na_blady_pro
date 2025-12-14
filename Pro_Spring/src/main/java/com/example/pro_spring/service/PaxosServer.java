@@ -4,7 +4,6 @@ import com.example.pro_spring.model.Promise;
 import com.example.pro_spring.util.HttpUtil;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,7 +30,7 @@ public class PaxosServer {
   );
 
   private static final double FAIL_CHANCE = 0.00;
-  
+
   private static volatile int leaderPort;
 
   @Getter
@@ -49,6 +48,8 @@ public class PaxosServer {
   private int prevPromisedProposal = -1;
   private int prevAcceptedProposal = -1;
   private int prevAcceptedValue = -1;
+  
+  private static int MAJORITY = 5;
 
   public PaxosServer(
       @Value("${server.port}") int port,
@@ -120,13 +121,10 @@ public class PaxosServer {
     ports.add(port);
 
     for (String s : SERVERS) {
-      try {
         String resp = HttpUtil.postParams(s + "/election");
         if (resp != null) {
           ports.add(Integer.parseInt(resp.trim()));
         }
-      } catch (Exception ignored) {
-      }
     }
 
     int winner = ports.stream().min(Integer::compare).orElse(port);
@@ -142,12 +140,10 @@ public class PaxosServer {
     new Thread(() -> {
       try {
         Thread.sleep(300);
-      } catch (Exception ignored) {
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
       }
-      try {
         ctx.close();
-      } catch (Exception ignored) {
-      }
     }).start();
   }
 
@@ -172,23 +168,128 @@ public class PaxosServer {
   private void rollbackAll(List<String> servers) {
     for (String s : servers) {
       executor.submit(() -> {
-        try {
           String resp = HttpUtil.postParams(s + "/rollback");
           System.out.printf("[LIDER %d] -> ROLLBACK wyslany do %s => %s%n", port, s, resp);
-        } catch (Exception ignored) {}
       });
     }
   }
+
+
+  private List<Promise> preparePhase(List<String> alive, long proposalId) {
+
+    List<Promise> promises = Collections.synchronizedList(new ArrayList<>());
+    CountDownLatch latch = new CountDownLatch(alive.size());
+
+    for (String s : alive) {
+      executor.submit(() -> {
+        try {
+          System.out.printf("[LIDER %d] -> PREPARE do %s%n", port, s);
+          String resp = HttpUtil.postParams(
+              s + "/prepare?proposalId=" + proposalId);
+
+          if (resp != null && resp.startsWith("PROMISE")) {
+            String[] p = resp.split(",");
+            if (p.length == 3 && !"NONE".equals(p[1])) {
+              promises.add(new Promise(true,
+                  Integer.parseInt(p[1]),
+                  Integer.parseInt(p[2])));
+            } else {
+              promises.add(new Promise(true, -1, -1));
+            }
+          }
+        } finally {
+          latch.countDown();
+        }
+      });
+    }
+
+    try {
+      latch.await();
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
+
+
+    System.out.printf("[LIDER %d] Otrzymane PROMISE: %s%n",
+        port,
+        promises.stream()
+            .map(p -> "(" + p.acceptedProposal() + "," + p.acceptedValue() + ")")
+            .toList());
+
+    return promises;
+  }
+
+
+  private Integer chooseValueFromPromises(
+      List<Promise> promises,
+      int clientValue
+  ) {
+
+    Map<Integer, Integer> counts = new HashMap<>();
+
+    for (Promise p : promises) {
+      int val = p.acceptedProposal() >= 0 ? p.acceptedValue() : -1;
+      counts.put(val, counts.getOrDefault(val, 0) + 1);
+    }
+
+    for (Map.Entry<Integer, Integer> e : counts.entrySet()) {
+      if (e.getValue() >= MAJORITY) {
+        return e.getKey() == -1 ? clientValue : e.getKey();
+      }
+    }
+
+    return null;
+  }
+
+  private int acceptPhase(
+      List<String> alive,
+      long proposalId,
+      int value
+  ) {
+
+    CountDownLatch latch = new CountDownLatch(alive.size());
+    List<Boolean> accepts = Collections.synchronizedList(new ArrayList<>());
+
+    for (String s : alive) {
+      executor.submit(() -> {
+        try {
+          System.out.printf("[LIDER %d] -> ACCEPT do %s, %d%n", port, s, value);
+          String resp = HttpUtil.postParams(
+              s + "/accept?proposalId=" + proposalId + "&value=" + value);
+
+          if (resp != null && resp.startsWith("ACCEPTED")) {
+            accepts.add(true);
+          }
+        } finally {
+          latch.countDown();
+        }
+      });
+    }
+
+    try {
+      latch.await();
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+    }
+
+
+    System.out.printf("[LIDER %d] Ilosc ACCEPT = %d%n",
+        port, accepts.size());
+
+    return accepts.size();
+  }
+
+
 
   private void runPaxosRound(int clientValue) {
 
     long proposalId = (System.currentTimeMillis() & 0xFFFFFFF) + id;
 
-    System.out.printf("%n[LIDER %d] Poczatek rundy paxosa %n", port);
-    System.out.printf("[LIDER %d] proposalId=%d, clientValue=%d%n", port, proposalId, clientValue);
+    System.out.printf("%n[LIDER %d] Poczatek rundy paxosa%n", port);
+    System.out.printf("[LIDER %d] proposalId=%d, clientValue=%d%n",
+        port, proposalId, clientValue);
 
     List<String> alive = collectAlive();
-
     System.out.printf("[LIDER %d] Dzialajace serwery (%d): %s%n",
         port, alive.size(), alive);
 
@@ -196,139 +297,39 @@ public class PaxosServer {
       System.out.printf("[LIDER %d] Brak zywych serwerow - koniec%n", port);
       return;
     }
+    
 
-    int majority = alive.size() / 2 + 1;
+    // Faza 1 PREPARE
+    List<Promise> promises = preparePhase(alive, proposalId);
 
-    // PHASE 1 — PREPARE
-    List<Promise> promises = Collections.synchronizedList(new ArrayList<>());
-    CountDownLatch latch1 = new CountDownLatch(alive.size());
-
-    for (String s : alive) {
-      if (Math.random() < FAIL_CHANCE) {
-        System.out.printf("[LIDER %d] Brak wyslania - symulacjia awarii komunikacji do %s w PREPARE %n", port, s);
-        latch1.countDown();
-        continue;
-      }
-
-      executor.submit(() -> {
-        try {
-          System.out.printf("[LIDER %d] -> PREPARE dla %s%n", port, s);
-          String resp = HttpUtil.postParams(s + "/prepare?proposalId=" + proposalId);
-
-          if (resp != null) {
-            System.out.printf("[LIDER %d] <- %s RESPONSE: %s%n", port, s, resp);
-            if (resp.startsWith("PROMISE")) {
-              String[] p = resp.split(",");
-              if (p.length == 3 && !"NONE".equals(p[1])) {
-                promises.add(new Promise(true, Integer.parseInt(p[1]), Integer.parseInt(p[2])));
-              } else {
-                promises.add(new Promise(true, -1, -1));
-              }
-            } else if (resp.startsWith("REJECT")) {
-            }
-          } else {
-            System.out.printf("[LIDER %d] <- %s Brak odpowiedzi w PREPARE (treated as down)%n", port, s);
-          }
-        } catch (Exception ignored) {
-        } finally {
-          latch1.countDown();
-        }
-      });
-    }
-
-    try {
-      latch1.await();
-    } catch (Exception ignored) {
-    }
-
-    System.out.printf("[LIDER %d] Otrzymane PROMISE: %s%n", port, promises.stream()
-        .map(p -> "(" + p.acceptedProposal + "," + p.acceptedValue + ")")
-        .toList());
-
-    if (promises.size() < majority) {
-      System.out.printf("[LIDER %d] Brak wiekszosci w PREPARE (%d/%d) — ROLLBACK%n", port, promises.size(), majority);
+    if (promises.size() < MAJORITY) {
+      System.out.printf("[LIDER %d] Brak wiekszosci w PREPARE (%d/%d) — ROLLBACK%n",
+          port, promises.size(), MAJORITY);
       rollbackAll(alive);
       return;
     }
 
-    Map<Integer, Integer> counts = new HashMap<>();
-    for (Promise p : promises) {
-      int val = p.acceptedProposal >= 0 ? p.acceptedValue : -1;
-      counts.put(val, counts.getOrDefault(val, 0) + 1);
-    }
-
-    boolean hasMaj = false;
-    int chosenValue = clientValue;
-    for (Map.Entry<Integer, Integer> e : counts.entrySet()) {
-      if (e.getValue() >= majority) {
-        hasMaj = true;
-        if (e.getKey() == -1) {
-          chosenValue = clientValue;
-        } else {
-          chosenValue = e.getKey();
-        }
-        break;
-      }
-    }
-
-    if (!hasMaj) {
-      System.out.printf("[LIDER %d] Brak większości na żadną wartość w PROMISES — ROLLBACK%n", port);
+    Integer chosenValue = chooseValueFromPromises(promises, clientValue);
+    if (chosenValue == null) {
+      System.out.printf("[LIDER %d] Brak większości na żadną wartość — ROLLBACK%n", port);
       rollbackAll(alive);
       return;
     }
 
-    System.out.printf("[LIDER %d] Ustalona wartosc (na podstawie wiekszosci) = %d%n", port, chosenValue);
+    System.out.printf("[LIDER %d] Ustalona wartosc = %d%n", port, chosenValue);
 
-    // PHASE 2 — ACCEPT
-    CountDownLatch latch2 = new CountDownLatch(alive.size());
-    List<Boolean> accepts = Collections.synchronizedList(new ArrayList<>());
+    // Faza 2 ACCEPT
+    int acceptedCount = acceptPhase(alive, proposalId, chosenValue);
 
-    for (String s : alive) {
-      if (Math.random() < FAIL_CHANCE) {
-        System.out.printf("[LIDER %d] Brak wyslania - symulacjia awarii komunikacji do %s w ACCEPT %n", port, s);
-        latch2.countDown();
-        continue;
-      }
-
-      int finalChosenValue = chosenValue;
-      executor.submit(() -> {
-        try {
-          System.out.printf("[LIDER %d] -> ACCEPT do %s, %d %n", port, s, finalChosenValue);
-          String resp = HttpUtil.postParams(
-              s + "/accept?proposalId=" + proposalId + "&value=" + finalChosenValue
-          );
-
-          if (resp != null) {
-            System.out.printf("[LIDER %d] <- %s RESPONSE: %s%n", port, s, resp);
-            if (resp.startsWith("ACCEPTED")) {
-              accepts.add(true);
-            }
-          } else {
-            System.out.printf("[LIDER %d] <- %s Brak odpowiedzi dla ACCEPT (treated as down)%n", port, s);
-          }
-
-        } catch (Exception ignored) {
-        } finally {
-          latch2.countDown();
-        }
-      });
-    }
-
-    try {
-      latch2.await();
-    } catch (Exception ignored) {
-    }
-
-    System.out.printf("[LIDER %d] Ilosc otrzymanych ACCEPT = %d (majority=%d)%n", port,
-        accepts.size(), majority);
-
-    if (accepts.size() >= majority) {
-      System.out.printf("[LIDER %d] Finalna, ustalona wartosc = %d%n", port, chosenValue);
+    if (acceptedCount >= MAJORITY) {
+      System.out.printf("[LIDER %d] Finalna, ustalona wartosc = %d%n",
+          port, chosenValue);
     } else {
       System.out.printf("[LIDER %d] Brak wiekszosci w ACCEPT — ROLLBACK%n", port);
       rollbackAll(alive);
     }
   }
+
 
   public synchronized String prepare(long proposalId) {
     if (!running) {

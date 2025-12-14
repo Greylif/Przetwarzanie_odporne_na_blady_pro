@@ -11,6 +11,10 @@ public class HttpUtil {
 
   private static final RestTemplate rest = new RestTemplate();
 
+  private HttpUtil() {
+    throw new UnsupportedOperationException("");
+  }
+
   public static String postParams(String url) {
     try {
       HttpHeaders headers = new HttpHeaders();
