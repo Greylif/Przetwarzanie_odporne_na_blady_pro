@@ -15,6 +15,10 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 
+/**
+ * Serwis implementujacy Paxos. Kazda instancja reprezentuje pojedynczy wezel w klastrze Paxosa.
+ * Komunikacja pomiedzy wezlami odbywa sie przez wywolania HTTP.
+ */
 @Service
 public class PaxosServer {
 
@@ -30,9 +34,8 @@ public class PaxosServer {
   );
 
   private static final double FAIL_CHANCE = 0.00;
-
+  private static final int MAJORITY = 5;
   private static volatile int leaderPort;
-
   @Getter
   private final int id;
   @Getter
@@ -40,22 +43,29 @@ public class PaxosServer {
   private final ThreadPoolTaskExecutor executor;
   private final ConfigurableApplicationContext ctx;
   private volatile boolean running = true;
-
   private int promisedProposal = -1;
   private int acceptedProposal = -1;
   private int acceptedValue = -1;
-
   private int prevPromisedProposal = -1;
   private int prevAcceptedProposal = -1;
   private int prevAcceptedValue = -1;
-  
-  private static int MAJORITY = 5;
+  @Getter
+  private volatile boolean stuck = false;
+  @Getter
+  private volatile String stuckMessage = "STUCK";
 
-  public PaxosServer(
-      @Value("${server.port}") int port,
-      @Value("${paxos.id}") int id,
-      @Value("${paxos.leaderPort}") int leader,
-      ThreadPoolTaskExecutor executor,
+
+  /**
+   * Tworzy instancje serwera Paxos.
+   *
+   * @param port port HTTP serwera
+   * @param id identyfikator
+   * @param leader port poczatkowego lidera
+   * @param executor executor watkow
+   * @param ctx kontekst Springa
+   */
+  public PaxosServer(@Value("${server.port}") int port, @Value("${paxos.id}") int id,
+      @Value("${paxos.leaderPort}") int leader, ThreadPoolTaskExecutor executor,
       ConfigurableApplicationContext ctx
   ) {
     this.port = port;
@@ -67,14 +77,26 @@ public class PaxosServer {
     System.out.printf(" SERVER %d Wlaczony na porcie %d (leader=%d) %n", id, port, leaderPort);
   }
 
+  /**
+   * Zwraca port aktualnego lidera.
+   */
   public static synchronized int getLeaderPort() {
     return leaderPort;
   }
 
+  /**
+   * Ustawia nowy port lidera.
+   */
   public static synchronized void setLeaderPort(int p) {
     leaderPort = p;
   }
 
+  /**
+   * Sprawdza, czy serwer pod wskazanym adresem odpowiada na zapytania.
+   *
+   * @param url adres serwera
+   * @return true jesli serwer odpowiada poprawnym stanem, false w przeciwnym razie
+   */
   private static boolean isAlive(String url) {
     try {
       String resp = HttpUtil.postParams(url + "/accepted_state");
@@ -84,21 +106,33 @@ public class PaxosServer {
     }
   }
 
+  /**
+   * Recznie ustawia promisedProposal.
+   */
   public synchronized void injectPromised(int x) {
     promisedProposal = x;
     System.out.printf("[SERVER %d] INJECT promised=%d%n", port, x);
   }
 
+  /**
+   * Recznie ustawia acceptedProposal.
+   */
   public synchronized void injectAcceptedProposal(int x) {
     acceptedProposal = x;
     System.out.printf("[SERVER %d] INJECT acceptedProposal=%d%n", port, x);
   }
 
+  /**
+   * Recznie ustawia acceptedValue.
+   */
   public synchronized void injectAcceptedValue(int x) {
     acceptedValue = x;
     System.out.printf("[SERVER %d] INJECT acceptedValue=%d%n", port, x);
   }
 
+  /**
+   * Okresowo sprawdza dostepnosc lidera i inicjuje elekcje w razie awarii.
+   */
   @Scheduled(fixedDelay = 3000)
   public void watcher() {
     if (!running) {
@@ -116,15 +150,19 @@ public class PaxosServer {
     }
   }
 
+
+  /**
+   * Przeprowadza wybor nowego lidera na podstawie najnizszego portu.
+   */
   private void electNewLeader() {
     List<Integer> ports = new ArrayList<>();
     ports.add(port);
 
     for (String s : SERVERS) {
-        String resp = HttpUtil.postParams(s + "/election");
-        if (resp != null) {
-          ports.add(Integer.parseInt(resp.trim()));
-        }
+      String resp = HttpUtil.postParams(s + "/election");
+      if (resp != null) {
+        ports.add(Integer.parseInt(resp.trim()));
+      }
     }
 
     int winner = ports.stream().min(Integer::compare).orElse(port);
@@ -133,6 +171,10 @@ public class PaxosServer {
     System.out.printf("[SERVER %d] Nowy leader wybrany = %d%n", port, winner);
   }
 
+
+  /**
+   * Symuluje awarie serwera i zamyka kontekst aplikacji.
+   */
   public void crash() {
     running = false;
     System.out.printf("[SERVER %d] Crash za 300ms%n", port);
@@ -143,38 +185,80 @@ public class PaxosServer {
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
       }
-        ctx.close();
+      ctx.close();
     }).start();
   }
 
+  /**
+   * Inicjuje nowa runde Paxosa.
+   */
   public void startPaxos(int value) {
     executor.submit(() -> runPaxosRound(value));
   }
 
+  /**
+   * Zapisuje poprzedni stan do rollbacku.
+   */
   private synchronized void savePrevState() {
     prevPromisedProposal = promisedProposal;
     prevAcceptedProposal = acceptedProposal;
     prevAcceptedValue = acceptedValue;
   }
 
+  /**
+   * Przywraca poprzedni stan serwera.
+   */
   public synchronized void rollback() {
     promisedProposal = prevPromisedProposal;
     acceptedProposal = prevAcceptedProposal;
     acceptedValue = prevAcceptedValue;
-    System.out.printf("[SERVER %d] ROLLBACK -> (%d,%d,%d)%n",
-        port, promisedProposal, acceptedProposal, acceptedValue);
+    System.out.printf("[SERVER %d] ROLLBACK -> (%d,%d,%d)%n", port, promisedProposal,
+        acceptedProposal, acceptedValue);
   }
 
+  /**
+   * Wysyla polecenie rollback do wszystkich wskazanych serwerow.
+   *
+   * @param servers lista adresow serwerow
+   */
   private void rollbackAll(List<String> servers) {
     for (String s : servers) {
       executor.submit(() -> {
-          String resp = HttpUtil.postParams(s + "/rollback");
-          System.out.printf("[LIDER %d] -> ROLLBACK wyslany do %s => %s%n", port, s, resp);
+        String resp = HttpUtil.postParams(s + "/rollback");
+        System.out.printf("[LIDER %d] -> ROLLBACK wyslany do %s => %s%n", port, s, resp);
       });
     }
   }
 
+  /**
+   * Blokuje serwer i wymusza zwracanie stalego komunikatu.
+   *
+   * @param message komunikat zwracany zamiast normalnych odpowiedzi
+   */
+  public synchronized void stuck(String message) {
+    this.stuck = true;
+    this.stuckMessage = message;
+    System.out.printf("[SERVER %d] Serwer zaciety z wiadomoscia: %s%n", port, message);
+  }
 
+
+  /**
+   * Odblokowuje serwer.
+   */
+  public synchronized void unstuck() {
+    this.stuck = false;
+    this.stuckMessage = null;
+    System.out.printf("[SERVER %d] Serwer wraca do normalnego dzialania: %n", port);
+  }
+
+
+  /**
+   * Realizuje faze PREPARE protokolu Paxos.
+   *
+   * @param alive lista aktywnych serwerow
+   * @param proposalId identyfikator propozycji
+   * @return lista otrzymanych obietnic (PROMISE)
+   */
   private List<Promise> preparePhase(List<String> alive, long proposalId) {
 
     List<Promise> promises = Collections.synchronizedList(new ArrayList<>());
@@ -209,7 +293,6 @@ public class PaxosServer {
       Thread.currentThread().interrupt();
     }
 
-
     System.out.printf("[LIDER %d] Otrzymane PROMISE: %s%n",
         port,
         promises.stream()
@@ -220,10 +303,14 @@ public class PaxosServer {
   }
 
 
-  private Integer chooseValueFromPromises(
-      List<Promise> promises,
-      int clientValue
-  ) {
+  /**
+   * Wybiera wartosc do zaakceptowania na podstawie otrzymanych PROMISE.
+   *
+   * @param promises lista obietnic od acceptorow
+   * @param clientValue wartosc zaproponowana przez klienta
+   * @return wybrana wartosc lub null jesli brak wiekszosci
+   */
+  private Integer chooseValueFromPromises(List<Promise> promises, int clientValue) {
 
     Map<Integer, Integer> counts = new HashMap<>();
 
@@ -241,11 +328,15 @@ public class PaxosServer {
     return null;
   }
 
-  private int acceptPhase(
-      List<String> alive,
-      long proposalId,
-      int value
-  ) {
+  /**
+   * Realizuje faze ACCEPT protokolu Paxos.
+   *
+   * @param alive lista aktywnych serwerow
+   * @param proposalId identyfikator propozycji
+   * @param value wartosc do zaakceptowania
+   * @return liczba serwerow, ktore zaakceptowaly wartosc
+   */
+  private int acceptPhase(List<String> alive, long proposalId, int value) {
 
     CountDownLatch latch = new CountDownLatch(alive.size());
     List<Boolean> accepts = Collections.synchronizedList(new ArrayList<>());
@@ -272,7 +363,6 @@ public class PaxosServer {
       Thread.currentThread().interrupt();
     }
 
-
     System.out.printf("[LIDER %d] Ilosc ACCEPT = %d%n",
         port, accepts.size());
 
@@ -280,7 +370,11 @@ public class PaxosServer {
   }
 
 
-
+  /**
+   * Wykonuje pelna runde Paxosa: PREPARE, PREPARED, ACCEPT ACCEPTED.
+   *
+   * @param clientValue wartosc zaproponowana przez klienta
+   */
   private void runPaxosRound(int clientValue) {
 
     long proposalId = (System.currentTimeMillis() & 0xFFFFFFF) + id;
@@ -297,9 +391,7 @@ public class PaxosServer {
       System.out.printf("[LIDER %d] Brak zywych serwerow - koniec%n", port);
       return;
     }
-    
 
-    // Faza 1 PREPARE
     List<Promise> promises = preparePhase(alive, proposalId);
 
     if (promises.size() < MAJORITY) {
@@ -311,19 +403,17 @@ public class PaxosServer {
 
     Integer chosenValue = chooseValueFromPromises(promises, clientValue);
     if (chosenValue == null) {
-      System.out.printf("[LIDER %d] Brak większości na żadną wartość — ROLLBACK%n", port);
+      System.out.printf("[LIDER %d] Brak wiekszosci na zadna wartosc — ROLLBACK%n", port);
       rollbackAll(alive);
       return;
     }
 
     System.out.printf("[LIDER %d] Ustalona wartosc = %d%n", port, chosenValue);
 
-    // Faza 2 ACCEPT
     int acceptedCount = acceptPhase(alive, proposalId, chosenValue);
 
     if (acceptedCount >= MAJORITY) {
-      System.out.printf("[LIDER %d] Finalna, ustalona wartosc = %d%n",
-          port, chosenValue);
+      System.out.printf("[LIDER %d] Finalna, ustalona wartosc = %d%n", port, chosenValue);
     } else {
       System.out.printf("[LIDER %d] Brak wiekszosci w ACCEPT — ROLLBACK%n", port);
       rollbackAll(alive);
@@ -331,7 +421,16 @@ public class PaxosServer {
   }
 
 
+  /**
+   * Obsluguje zadanie PREPARE jako acceptor.
+   *
+   * @param proposalId identyfikator propozycji
+   * @return odpowiedz PROMISE, REJECT lub komunikat blokady
+   */
   public synchronized String prepare(long proposalId) {
+    if (stuck) {
+      return stuckMessage;
+    }
     if (!running) {
       return null;
     }
@@ -339,7 +438,8 @@ public class PaxosServer {
     System.out.printf("[SERVER %d] <- PREPARE proposalId=%d%n", port, proposalId);
 
     if (Math.random() < FAIL_CHANCE) {
-      System.out.printf("[SERVER %d] Brak odpowiedzi - symulacja awarii komunikacji w PREPARE %n", port);
+      System.out.printf("[SERVER %d] Brak odpowiedzi - symulacja awarii komunikacji w PREPARE %n",
+          port);
       return null;
     }
 
@@ -363,13 +463,25 @@ public class PaxosServer {
     return "REJECT";
   }
 
+  /**
+   * Obsluguje zadanie ACCEPT jako acceptor.
+   *
+   * @param proposalId identyfikator propozycji
+   * @param value wartosc do zaakceptowania
+   * @return odpowiedz ACCEPTED, REJECT lub komunikat blokady
+   */
   public synchronized String accept(long proposalId, int value) {
+    if (stuck) {
+      return stuckMessage;
+    }
+
     if (!running) {
       return null;
     }
 
     if (Math.random() < FAIL_CHANCE) {
-      System.out.printf("[SERVER %d] Brak odpowiedzi - symulacja awarii komunikacji w ACCEPT %n", port);
+      System.out.printf("[SERVER %d] Brak odpowiedzi - symulacja awarii komunikacji w ACCEPT %n",
+          port);
       return null;
     }
 
@@ -392,10 +504,23 @@ public class PaxosServer {
     return "REJECT," + proposalId + "," + value;
   }
 
+
+  /**
+   * Zwraca aktualny stan serwera.
+   *
+   * @return tekstowa reprezentacja stanu Paxosa
+   */
   public synchronized String state() {
+    if (stuck) {
+      return stuckMessage;
+    }
     return "STATE," + promisedProposal + "," + acceptedProposal + "," + acceptedValue;
   }
 
+
+  /**
+   * Czysci caly lokalny stan serwera.
+   */
   public synchronized void clear() {
     promisedProposal = -1;
     acceptedProposal = -1;
@@ -406,8 +531,14 @@ public class PaxosServer {
     prevAcceptedValue = -1;
 
     System.out.printf("[SERVER %d] Wyczyszczono dane %n", port);
+
   }
 
+  /**
+   * Zbiera liste aktualnie dostepnych serwerow.
+   *
+   * @return lista adresow serwerow odpowiadajacych na zapytania
+   */
   private List<String> collectAlive() {
     List<String> list = new ArrayList<>();
     for (String s : SERVERS) {
@@ -417,4 +548,5 @@ public class PaxosServer {
     }
     return list;
   }
+
 }
