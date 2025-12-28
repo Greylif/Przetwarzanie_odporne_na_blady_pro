@@ -156,13 +156,30 @@ public class PaxosServer {
    */
   private void electNewLeader() {
     List<Integer> ports = new ArrayList<>();
-    ports.add(port);
+
+    if (!stuck) {
+      ports.add(port);
+    }
 
     for (String s : SERVERS) {
-      String resp = HttpUtil.postParams(s + "/election");
-      if (resp != null) {
-        ports.add(Integer.parseInt(resp.trim()));
+      try {
+        String resp = HttpUtil.postParams(s + "/election");
+
+        if (resp == null) {
+          continue;
+        }
+
+        int p = Integer.parseInt(resp.trim());
+        ports.add(p);
+
+      } catch (NumberFormatException e) {
+        System.out.printf("[SERVER %d] %s jest STUCK (%s)%n", port, s, e.getMessage());
       }
+    }
+
+    if (ports.isEmpty()) {
+      System.out.printf("[SERVER %d] Brak kandydatow na lidera%n", port);
+      return;
     }
 
     int winner = ports.stream().min(Integer::compare).orElse(port);
@@ -170,6 +187,7 @@ public class PaxosServer {
 
     System.out.printf("[SERVER %d] Nowy leader wybrany = %d%n", port, winner);
   }
+
 
 
   /**
