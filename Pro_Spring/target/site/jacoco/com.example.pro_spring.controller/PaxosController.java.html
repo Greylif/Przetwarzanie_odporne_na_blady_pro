@@ -251,9 +251,14 @@ public class PaxosController {
 <span class="fc" id="L251">    return &quot;Odblokowany&quot;;</span>
   }
 
+  /**
+   * Pobranie portu lidera
+   *
+   * @return port lidera
+   */
   @PostMapping(&quot;/leader&quot;)
   public String leader() {
-<span class="nc" id="L256">    return String.valueOf(getLeaderPort());</span>
+<span class="nc" id="L261">    return String.valueOf(getLeaderPort());</span>
   }
 
 
