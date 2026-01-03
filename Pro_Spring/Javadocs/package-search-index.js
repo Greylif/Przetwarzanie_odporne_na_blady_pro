@@ -1,1 +1,0 @@
-packageSearchIndex = [{"l":"All Packages","u":"allpackages-index.html"},{"l":"com.example.pro_spring"},{"l":"com.example.pro_spring.config"},{"l":"com.example.pro_spring.controller"},{"l":"com.example.pro_spring.model"},{"l":"com.example.pro_spring.service"},{"l":"com.example.pro_spring.util"}];updateSearchResults();
