@@ -322,6 +322,86 @@ class PaxosServerTests {
         assertThat(PaxosServer.getLeaderPort()).isEqualTo(8000);
       }
     }
+<<<<<<< HEAD
+=======
+
+    @Test
+    @DisplayName("electNewLeader – wybiera najmniejszy port z odpowiedzi")
+    void electNewLeaderReflection() throws Exception {
+
+      PaxosServer.setLeaderPort(9999);
+
+      try (MockedStatic<HttpUtil> http = mockStatic(HttpUtil.class)) {
+
+        http.when(() -> HttpUtil.postParams(contains("/election")))
+            .thenAnswer(inv -> {
+              String url = inv.getArgument(0);
+              if (url.contains("8001")) return "8001";
+              if (url.contains("8002")) return "8002";
+              return null;
+            });
+
+        Method m = PaxosServer.class.getDeclaredMethod("electNewLeader");
+        m.setAccessible(true);
+        m.invoke(server);
+
+        assertThat(PaxosServer.getLeaderPort()).isEqualTo(8000);
+      }
+    }
+
+    @Test
+    @DisplayName("@PostConstruct – lider istnieje, brak elekcji")
+    void discoverLeaderOnStartupLeaderAlive() {
+
+      PaxosServer.setLeaderPort(8001);
+
+      doAnswer(inv -> {
+        Runnable r = inv.getArgument(0);
+        r.run();
+        return null;
+      }).when(executor).submit(any(Runnable.class));
+
+      try (MockedStatic<HttpUtil> http = mockStatic(HttpUtil.class)) {
+
+        http.when(() ->
+            HttpUtil.postParams("http://localhost:8001/accepted_state")
+        ).thenReturn("STATE,-1,-1,-1");
+
+        server.discoverLeaderOnStartup();
+
+        assertThat(PaxosServer.getLeaderPort()).isEqualTo(8001);
+      }
+    }
+
+    @Test
+    @DisplayName("@PostConstruct – lider martwy, wywolanie elekcji")
+    void discoverLeaderOnStartupElect() {
+
+      PaxosServer.setLeaderPort(9000);
+
+      doAnswer(inv -> {
+        Runnable r = inv.getArgument(0);
+        r.run();
+        return null;
+      }).when(executor).submit(any(Runnable.class));
+
+      try (MockedStatic<HttpUtil> http = mockStatic(HttpUtil.class)) {
+
+        http.when(() ->
+            HttpUtil.postParams("http://localhost:9000/accepted_state")
+        ).thenReturn(null);
+
+        http.when(() -> HttpUtil.postParams(contains("/election")))
+            .thenReturn("8000");
+
+        server.discoverLeaderOnStartup();
+
+        assertThat(PaxosServer.getLeaderPort()).isEqualTo(8000);
+      }
+    }
+
+
+>>>>>>> 5509c15a487b5043f48cde95f33ee465e5447a6f
   }
 
 

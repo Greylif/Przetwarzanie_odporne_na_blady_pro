@@ -75,7 +75,11 @@ public class PaxosController {
    */
   @PostMapping("/accept")
   public String accept(@RequestParam long proposalId,
+<<<<<<< HEAD
                        @RequestParam int value) {
+=======
+      @RequestParam int value) {
+>>>>>>> 5509c15a487b5043f48cde95f33ee465e5447a6f
     if (server.isStuck()) {
       return server.getStuckMessage();
     }
@@ -103,7 +107,11 @@ public class PaxosController {
   @PostMapping("/election")
   public String election() {
     if (server.isStuck()) {
+<<<<<<< HEAD
       return "STUCK";
+=======
+      return server.getStuckMessage();
+>>>>>>> 5509c15a487b5043f48cde95f33ee465e5447a6f
     }
     return String.valueOf(server.getPort());
   }
@@ -156,6 +164,7 @@ public class PaxosController {
     }
 
     List<String> servers = List.of(
+<<<<<<< HEAD
             "http://localhost:8000",
             "http://localhost:8001",
             "http://localhost:8002",
@@ -164,6 +173,16 @@ public class PaxosController {
             "http://localhost:8005",
             "http://localhost:8006",
             "http://localhost:8007"
+=======
+        "http://localhost:8000",
+        "http://localhost:8001",
+        "http://localhost:8002",
+        "http://localhost:8003",
+        "http://localhost:8004",
+        "http://localhost:8005",
+        "http://localhost:8006",
+        "http://localhost:8007"
+>>>>>>> 5509c15a487b5043f48cde95f33ee465e5447a6f
     );
 
     int count = 0;
@@ -192,9 +211,15 @@ public class PaxosController {
    */
   @PostMapping("/inject")
   public String inject(
+<<<<<<< HEAD
           @RequestParam(required = false) Integer promised,
           @RequestParam(required = false) Integer acceptedProposal,
           @RequestParam(required = false) Integer acceptedValue
+=======
+      @RequestParam(required = false) Integer promised,
+      @RequestParam(required = false) Integer acceptedProposal,
+      @RequestParam(required = false) Integer acceptedValue
+>>>>>>> 5509c15a487b5043f48cde95f33ee465e5447a6f
   ) {
     if (server.isStuck()) {
       return server.getStuckMessage();
@@ -258,4 +283,8 @@ public class PaxosController {
 
 
 
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 5509c15a487b5043f48cde95f33ee465e5447a6f
