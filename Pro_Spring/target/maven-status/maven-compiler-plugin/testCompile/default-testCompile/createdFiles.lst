@@ -1,0 +1,14 @@
+com\example\pro_spring\PaxosServerTests$InjectTests.class
+com\example\pro_spring\PromiseTests.class
+com\example\pro_spring\PaxosServerTests$AcceptTests.class
+com\example\pro_spring\ControllerTests$ClearAllTests.class
+com\example\pro_spring\PaxosServerTests$WatcherTests.class
+com\example\pro_spring\PaxosServerTests.class
+com\example\pro_spring\ControllerTests$InjectTests.class
+com\example\pro_spring\ControllerTests$ClientProposeTests.class
+com\example\pro_spring\ControllerTests.class
+com\example\pro_spring\PaxosServerTests$PrepareTests.class
+com\example\pro_spring\HttpUtilTest.class
+com\example\pro_spring\PaxosServerTests$StartPaxosTests.class
+com\example\pro_spring\PaxosServerTests$StuckTests.class
+com\example\pro_spring\ProSpringApplicationTests.class
