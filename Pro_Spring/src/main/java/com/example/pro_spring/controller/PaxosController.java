@@ -1,8 +1,11 @@
 package com.example.pro_spring.controller;
 
+import static com.example.pro_spring.service.PaxosServer.getLeaderPort;
+
 import com.example.pro_spring.service.PaxosServer;
 import com.example.pro_spring.util.HttpUtil;
 import java.util.List;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -41,8 +44,8 @@ public class PaxosController {
     if (server.isStuck()) {
       return server.getStuckMessage();
     }
-    if (PaxosServer.getLeaderPort() != server.getPort()) {
-      return "NOT_LEADER," + PaxosServer.getLeaderPort();
+    if (getLeaderPort() != server.getPort()) {
+      return "NOT_LEADER," + getLeaderPort();
     }
     server.startPaxos(value);
     return "OK: proposal started by leader on port " + server.getPort();
@@ -148,8 +151,8 @@ public class PaxosController {
     if (server.isStuck()) {
       return server.getStuckMessage();
     }
-    if (PaxosServer.getLeaderPort() != server.getPort()) {
-      return "NOT_LEADER," + PaxosServer.getLeaderPort();
+    if (getLeaderPort() != server.getPort()) {
+      return "NOT_LEADER," + getLeaderPort();
     }
 
     List<String> servers = List.of(
@@ -247,6 +250,12 @@ public class PaxosController {
     server.unstuck();
     return "Odblokowany";
   }
+
+  @PostMapping("/leader")
+  public String leader() {
+    return String.valueOf(getLeaderPort());
+  }
+
 
 
 }

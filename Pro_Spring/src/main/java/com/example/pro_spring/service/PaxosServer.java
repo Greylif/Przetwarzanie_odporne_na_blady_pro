@@ -2,6 +2,7 @@ package com.example.pro_spring.service;
 
 import com.example.pro_spring.model.Promise;
 import com.example.pro_spring.util.HttpUtil;
+import jakarta.annotation.PostConstruct;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -77,6 +78,54 @@ public class PaxosServer {
     System.out.printf(" SERVER %d Wlaczony na porcie %d (leader=%d) %n", id, port, leaderPort);
   }
 
+  private Integer discoverLeaderFromCluster() {
+
+    Integer bestLeader = null;
+
+    for (String s : SERVERS) {
+      try {
+        String resp = HttpUtil.postParams(s + "/leader");
+        if (resp == null) continue;
+
+        int leader = Integer.parseInt(resp.trim());
+
+        if (!isAlive("http://localhost:" + leader)) {
+          continue;
+        }
+
+        if (bestLeader == null || leader < bestLeader) {
+          bestLeader = leader;
+        }
+
+      } catch (Exception ignored) {}
+    }
+
+    return bestLeader;
+  }
+
+
+
+  @PostConstruct
+  public void discoverLeaderOnStartup() {
+    executor.submit(() -> {
+
+      Integer discovered = discoverLeaderFromCluster();
+
+      if (discovered != null) {
+        setLeaderPort(discovered);
+        System.out.printf(
+            "[SERVER %d] Odkryto istniejacego lidera: %d%n",
+            port, discovered
+        );
+        return;
+      }
+
+      electNewLeader();
+    });
+  }
+
+
+
   /**
    * Zwraca port aktualnego lidera.
    */
@@ -88,8 +137,12 @@ public class PaxosServer {
    * Ustawia nowy port lidera.
    */
   public static synchronized void setLeaderPort(int p) {
+    if (leaderPort == p) return;
+
+    System.out.printf("LEADER CHANGE: %d -> %d%n", leaderPort, p);
     leaderPort = p;
   }
+
 
   /**
    * Sprawdza, czy serwer pod wskazanym adresem odpowiada na zapytania.
@@ -155,6 +208,16 @@ public class PaxosServer {
    * Przeprowadza wybor nowego lidera na podstawie najnizszego portu.
    */
   private void electNewLeader() {
+
+    int currentLeader = getLeaderPort();
+    if (currentLeader != port &&
+        isAlive("http://localhost:" + currentLeader)) {
+      System.out.printf(
+          "[SERVER %d] Elekcja przerwana – leader %d nadal zyje%n",
+          port, currentLeader);
+      return;
+    }
+
     List<Integer> ports = new ArrayList<>();
 
     if (!stuck) {
