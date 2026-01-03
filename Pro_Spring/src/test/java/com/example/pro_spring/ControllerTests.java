@@ -383,5 +383,16 @@ class ControllerTests {
     verify(server, never()).rollback();
   }
 
+  @Test
+  @DisplayName("/leader – zwraca port lidera")
+  void leaderEndpoint() throws Exception {
+    PaxosServer.setLeaderPort(8005);
+
+    mockMvc.perform(post("/leader"))
+        .andExpect(status().isOk())
+        .andExpect(content().string("8005"));
+  }
+
+
 
 }

@@ -524,4 +524,95 @@ class PaxosServerTests {
     assertThat(result).isEqualTo(42);
   }
 
+  @Test
+  @DisplayName("discoverLeaderOnRecovery – odnaleziony lider z klastra")
+  void discoverLeaderOnRecoveryFound() throws Exception {
+
+    PaxosServer.setLeaderPort(-1);
+
+    try (MockedStatic<HttpUtil> http = mockStatic(HttpUtil.class)) {
+
+      http.when(() -> HttpUtil.postParams(contains("/leader")))
+          .thenReturn("8003");
+
+      http.when(() -> HttpUtil.postParams(contains("/accepted_state")))
+          .thenReturn("STATE,-1,-1,-1");
+
+      Method m = PaxosServer.class
+          .getDeclaredMethod("discoverLeaderOnRecovery");
+      m.setAccessible(true);
+
+      m.invoke(server);
+
+      assertThat(PaxosServer.getLeaderPort()).isEqualTo(8003);
+    }
+  }
+
+  @Test
+  @DisplayName("discoverLeaderOnRecovery – brak lidera, start elekcji")
+  void discoverLeaderOnRecoveryElect() throws Exception {
+
+    PaxosServer.setLeaderPort(-1);
+
+    try (MockedStatic<HttpUtil> http = mockStatic(HttpUtil.class)) {
+
+      http.when(() -> HttpUtil.postParams(contains("/leader")))
+          .thenReturn(null);
+
+      http.when(() -> HttpUtil.postParams(contains("/election")))
+          .thenReturn("8000");
+
+      Method m = PaxosServer.class
+          .getDeclaredMethod("discoverLeaderOnRecovery");
+      m.setAccessible(true);
+
+      m.invoke(server);
+
+      assertThat(PaxosServer.getLeaderPort()).isEqualTo(8000);
+    }
+  }
+
+  @Test
+  @DisplayName("electNewLeader – ignoruje STUCK serwer (NumberFormatException)")
+  void electNewLeaderSkipsStuckServer() throws Exception {
+
+    PaxosServer.setLeaderPort(-1);
+
+    try (MockedStatic<HttpUtil> http = mockStatic(HttpUtil.class)) {
+
+      http.when(() -> HttpUtil.postParams(contains("/election")))
+          .thenReturn("NOT_A_NUMBER");
+
+      Method m = PaxosServer.class.getDeclaredMethod("electNewLeader");
+      m.setAccessible(true);
+
+      m.invoke(server);
+
+      assertThat(PaxosServer.getLeaderPort()).isEqualTo(8000);
+    }
+  }
+
+  @Test
+  @DisplayName("electNewLeader – brak kandydatow na lidera")
+  void electNewLeaderNoCandidates() throws Exception {
+
+    PaxosServer.setLeaderPort(1234);
+    server.stuck("ERROR");
+
+    try (MockedStatic<HttpUtil> http = mockStatic(HttpUtil.class)) {
+
+      http.when(() -> HttpUtil.postParams(contains("/election")))
+          .thenReturn(null);
+
+      Method m = PaxosServer.class.getDeclaredMethod("electNewLeader");
+      m.setAccessible(true);
+
+      m.invoke(server);
+
+      assertThat(PaxosServer.getLeaderPort()).isEqualTo(1234);
+    }
+  }
+
+
+
 }
