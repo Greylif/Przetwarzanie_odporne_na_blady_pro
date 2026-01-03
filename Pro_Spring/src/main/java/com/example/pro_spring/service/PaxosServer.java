@@ -211,6 +211,7 @@ public class PaxosServer {
           port, leader
       );
     }
+    electNewLeader();
   }
 
   /**
@@ -234,9 +235,6 @@ public class PaxosServer {
     int currentLeader = getLeaderPort();
     if (currentLeader != port &&
         isAlive("http://localhost:" + currentLeader)) {
-      System.out.printf(
-          "[SERVER %d] Elekcja przerwana – leader %d nadal zyje%n",
-          port, currentLeader);
       return;
     }
 
