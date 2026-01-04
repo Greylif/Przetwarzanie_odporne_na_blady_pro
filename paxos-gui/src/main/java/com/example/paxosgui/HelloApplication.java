@@ -7,6 +7,7 @@ import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
+import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
@@ -15,19 +16,56 @@ import javafx.util.Duration;
 import java.net.URL;
 import java.util.Scanner;
 
+/**
+ * Aplikacja do wizualizacji i sterowania Paxos.
+ *
+ * Każdy węzeł Paxos prezentowany jest jako osobny panel w jednym oknie.
+ * Aplikacja komunikuje się z backendem poprzez żądania HTTP.
+ */
 public class HelloApplication extends Application {
 
+    /**
+     * Uruchamia aplikację JavaFX i tworzy jedno okno zawierające
+     * panele dla wszystkich węzłów Paxos.
+     *
+     * @param primaryStage główne okno aplikacji
+     */
     @Override
     public void start(Stage primaryStage) {
+
+        GridPane grid = new GridPane();
+        grid.setHgap(15);
+        grid.setVgap(15);
+        grid.setStyle("-fx-padding: 15;");
+
+        int index = 0;
         for (int port = 8000; port <= 8007; port++) {
-            createNodeWindow(port);
+            VBox nodePane = createNodePane(port);
+
+            int col = index % 4;
+            int row = index / 4;
+            grid.add(nodePane, col, row);
+
+            index++;
         }
+
+        Scene scene = new Scene(grid, 1800, 900);
+        primaryStage.setTitle("Paxos Cluster");
+        primaryStage.setScene(scene);
+        primaryStage.show();
     }
 
-    private void createNodeWindow(int port) {
-        Stage stage = new Stage();
+    /**
+     * Tworzy panel graficzny reprezentujący pojedynczy węzeł Paxos.
+     *
+     * @param port HTTP węzła Paxos
+     * @return VBox zawierający kontrolki i stan węzła
+     */
+
+    private VBox createNodePane(int port) {
 
         Label title = new Label("Paxos Node " + port);
+        title.setStyle("-fx-font-weight: bold; -fx-font-size: 14;");
 
         Label stateLabel = new Label("STATE: ?");
         stateLabel.setStyle("-fx-font-weight: bold;");
@@ -36,16 +74,18 @@ public class HelloApplication extends Application {
         statusLabel.setStyle("-fx-text-fill: blue;");
 
         TextField valueInput = new TextField();
-        valueInput.setPromptText("client propose value");
+        valueInput.setPromptText("client propose value (>=0)");
+        onlyPositiveNumbers(valueInput);
 
         Button proposeBtn = new Button("PROPOSE");
         proposeBtn.setOnAction(e -> {
-            String value = valueInput.getText();
-            if (value != null && !value.isBlank()) {
-                statusLabel.setText(
-                        post("http://localhost:" + port + "/client_propose?value=" + value)
-                );
+            if (valueInput.getText().isBlank()) {
+                statusLabel.setText("Value required (>=0)");
+                return;
             }
+            statusLabel.setText(
+                    post("http://localhost:" + port + "/client_propose?value=" + valueInput.getText())
+            );
         });
 
         Button crashBtn = new Button("CRASH");
@@ -68,13 +108,8 @@ public class HelloApplication extends Application {
 
         Button stuckBtn = new Button("STUCK");
         stuckBtn.setOnAction(e -> {
-            String msg = stuckMsgInput.getText();
-            if (msg == null || msg.isBlank()) {
-                msg = "STUCK";
-            }
-            statusLabel.setText(
-                    post("http://localhost:" + port + "/stuck?msg=" + msg)
-            );
+            String msg = stuckMsgInput.getText().isBlank() ? "STUCK" : stuckMsgInput.getText();
+            statusLabel.setText(post("http://localhost:" + port + "/stuck?msg=" + msg));
         });
 
         Button unstuckBtn = new Button("UNSTUCK");
@@ -83,13 +118,16 @@ public class HelloApplication extends Application {
         );
 
         TextField promisedInput = new TextField();
-        promisedInput.setPromptText("promised");
+        promisedInput.setPromptText("promised (>=0)");
+        onlyPositiveNumbers(promisedInput);
 
         TextField acceptedProposalInput = new TextField();
-        acceptedProposalInput.setPromptText("acceptedProposal");
+        acceptedProposalInput.setPromptText("acceptedProposal (>=0)");
+        onlyPositiveNumbers(acceptedProposalInput);
 
         TextField acceptedValueInput = new TextField();
-        acceptedValueInput.setPromptText("acceptedValue");
+        acceptedValueInput.setPromptText("acceptedValue (>=0)");
+        onlyPositiveNumbers(acceptedValueInput);
 
         Button injectBtn = new Button("INJECT");
         injectBtn.setOnAction(e -> {
@@ -103,31 +141,27 @@ public class HelloApplication extends Application {
             statusLabel.setText(post(url.toString()));
         });
 
-
-        VBox root = new VBox(10,
+        VBox root = new VBox(8,
                 title,
                 stateLabel,
-
                 valueInput,
                 proposeBtn,
-
-                new HBox(10, crashBtn, clearBtn, clearAllBtn),
-
+                new HBox(5, crashBtn, clearBtn, clearAllBtn),
                 stuckMsgInput,
-                new HBox(10, stuckBtn, unstuckBtn),
-
+                new HBox(5, stuckBtn, unstuckBtn),
                 promisedInput,
                 acceptedProposalInput,
                 acceptedValueInput,
                 injectBtn,
-
                 statusLabel
         );
-        root.setStyle("-fx-padding: 20;");
 
-        stage.setTitle("Paxos Node " + port);
-        stage.setScene(new Scene(root, 420, 520));
-        stage.show();
+        root.setStyle("""
+                -fx-padding: 10;
+                -fx-border-color: black;
+                -fx-border-radius: 5;
+                -fx-background-color: #f5f5f5;
+        """);
 
         Timeline timeline = new Timeline(
                 new KeyFrame(Duration.seconds(1), e -> {
@@ -145,9 +179,37 @@ public class HelloApplication extends Application {
         );
         timeline.setCycleCount(Timeline.INDEFINITE);
         timeline.play();
+
+        return root;
     }
 
+    /**
+     * Ogranicza pole tekstowe do wprowadzania wyłącznie
+     * nieujemnych liczb całkowitych.
+     *
+     * @param field pole tekstowe do ograniczenia
+     */
+    private void onlyPositiveNumbers(TextField field) {
+        field.textProperty().addListener((obs, oldVal, newVal) -> {
+            if (!newVal.matches("\\d*")) {
+                field.setText(newVal.replaceAll("[^\\d]", ""));
+            }
+        });
+    }
 
+    /**
+     * Dodaje parametr zapytania HTTP do budowanego adresu URL,
+     * jeśli wartość parametru jest niepusta i poprawna (nieujemna liczba).
+     *
+     * Metoda automatycznie decyduje, czy użyć znaku '?' (pierwszy parametr)
+     * czy '&' (kolejne parametry).
+     *
+     * @param url obiekt StringBuilder reprezentujący adres URL
+     * @param name nazwa parametru
+     * @param value wartość parametru (musi być liczbą >= 0)
+     * @param first informacja, czy jest to pierwszy parametr w URL
+     * @return false jeśli parametr został dodany, true jeśli nadal brak parametrów
+     */
     private boolean appendParam(StringBuilder url, String name, String value, boolean first) {
         if (value != null && !value.isBlank()) {
             if (!value.matches("\\d+")) return first;
@@ -156,7 +218,12 @@ public class HelloApplication extends Application {
         }
         return first;
     }
-
+    /**
+     * Sprawdza, czy dany węzeł jest aktualnym liderem.
+     *
+     * @param port port węzła
+     * @return true jeśli węzeł jest liderem
+     */
     private boolean isLeader(int port) {
         String resp = post("http://localhost:" + port + "/leader");
         try {
@@ -166,6 +233,12 @@ public class HelloApplication extends Application {
         }
     }
 
+    /**
+     * Wysyła żądanie HTTP POST pod wskazany adres.
+     *
+     * @param urlStr adres URL
+     * @return treść odpowiedzi lub "OFFLINE" w przypadku błędu
+     */
     private String post(String urlStr) {
         try {
             URL url = new URL(urlStr);
