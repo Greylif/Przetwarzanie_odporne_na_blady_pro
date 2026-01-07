@@ -1,6 +1,11 @@
 com\example\pro_spring\PaxosServerTests$InjectTests.class
+com\example\pro_spring\ExceptionTests$ServerExceptionTests.class
+com\example\pro_spring\ExceptionTests$TestExceptionController.class
 com\example\pro_spring\PromiseTests.class
 com\example\pro_spring\PaxosServerTests$AcceptTests.class
+com\example\pro_spring\ExceptionTests$GlobalExceptionHandlerTests.class
+com\example\pro_spring\ExceptionTests$HttpUtilExceptionTests.class
+com\example\pro_spring\ExceptionTests.class
 com\example\pro_spring\ControllerTests$ClearAllTests.class
 com\example\pro_spring\PaxosServerTests$WatcherTests.class
 com\example\pro_spring\PaxosServerTests.class

@@ -5,7 +5,6 @@ import static com.example.pro_spring.service.PaxosServer.getLeaderPort;
 import com.example.pro_spring.service.PaxosServer;
 import com.example.pro_spring.util.HttpUtil;
 import java.util.List;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -13,7 +12,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Kontroler REST obslugujacy endpointy protokolu Paxos.
- *
  * Kontroler deleguje cala logike konsensusu do klasy PaxosServer.
  */
 @RestController
@@ -32,9 +30,8 @@ public class PaxosController {
 
   /**
    * Endpoint kliencki do zglaszania propozycji wartosci.
-   *
-   * Propozycja moze zostac przyjeta wylacznie przez lidera.
-   * Jesli serwer nie jest liderem, zwracany jest port aktualnego lidera.
+   * Propozycja moze zostac przyjeta wylacznie przez lidera. Jesli serwer nie jest liderem, zwracany
+   * jest port aktualnego lidera.
    *
    * @param value wartosc proponowana przez klienta
    * @return informacja o przyjeciu propozycji lub o aktualnym liderze
@@ -70,7 +67,7 @@ public class PaxosController {
    * Obsluguje faze ACCEPT protokolu Paxos.
    *
    * @param proposalId identyfikator propozycji
-   * @param value wartosc do zaakceptowania
+   * @param value      wartosc do zaakceptowania
    * @return odpowiedz ACCEPTED lub REJECTED
    */
   @PostMapping("/accept")
@@ -111,7 +108,6 @@ public class PaxosController {
 
   /**
    * Symuluje awarie serwera.
-   *
    * Po wywolaniu serwer przestaje odpowiadac na zadania Paxosa.
    *
    * @return komunikat o awarii
@@ -141,7 +137,6 @@ public class PaxosController {
 
   /**
    * Czysci stan wszystkich serwerow w systemie.
-   *
    * Operacja moze zostac wykonana wylacznie przez lidera.
    *
    * @return raport z czyszczenia serwerow
@@ -182,12 +177,11 @@ public class PaxosController {
 
   /**
    * Recznie wstrzykuje wartosci do stanu serwera.
-   *
    * Wykorzystywane glownie w testach i symulacjach bledow.
    *
-   * @param promised nowa wartosc promised
+   * @param promised         nowa wartosc promised
    * @param acceptedProposal nowy numer zaakceptowanej propozycji
-   * @param acceptedValue nowa zaakceptowana wartosc
+   * @param acceptedValue    nowa zaakceptowana wartosc
    * @return status operacji
    */
   @PostMapping("/inject")
@@ -252,7 +246,7 @@ public class PaxosController {
   }
 
   /**
-   * Pobranie portu lidera
+   * Pobranie portu lidera.
    *
    * @return port lidera
    */
@@ -260,7 +254,6 @@ public class PaxosController {
   public String leader() {
     return String.valueOf(getLeaderPort());
   }
-
 
 
 }

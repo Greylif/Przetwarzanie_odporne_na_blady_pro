@@ -1,8 +1,10 @@
 package com.example.pro_spring;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import com.example.pro_spring.exception.HttpUtilException;
 import com.example.pro_spring.util.HttpUtil;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -42,17 +44,21 @@ class HttpUtilTest {
   }
 
   @Test
-  @DisplayName("postParams null")
+  @DisplayName("postParams – rzuca HttpUtilException")
   void postParamsException() {
+
     mockServer.expect(requestTo("http://fail/url"))
         .andExpect(method(HttpMethod.POST))
         .andRespond(withServerError());
 
-    String result = HttpUtil.postParams("http://fail/url");
+    assertThatThrownBy(() -> HttpUtil.postParams("http://fail/url"))
+        .isInstanceOf(HttpUtilException.class)
+        .hasMessageContaining("HTTP communication failed for URL: http://fail/url");
 
     mockServer.verify();
-    assertThat(result).isNull();
   }
+
+
 
   @Test
   @DisplayName("Konstruktor rzuca wyjatek")

@@ -5,7 +5,6 @@ import static com.example.pro_spring.service.PaxosServer.getLeaderPort;
 import com.example.pro_spring.service.PaxosServer;
 import com.example.pro_spring.util.HttpUtil;
 import java.util.List;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -13,7 +12,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Kontroler REST obslugujacy endpointy protokolu Paxos.
- *
  * Kontroler deleguje cala logike konsensusu do klasy PaxosServer.
  */
 @RestController
@@ -26,29 +24,28 @@ public class PaxosController {
    *
    * @param server instancja serwera Paxos
    */
-<span class="fc" id="L29">  public PaxosController(PaxosServer server) {</span>
-<span class="fc" id="L30">    this.server = server;</span>
-<span class="fc" id="L31">  }</span>
+<span class="fc" id="L27">  public PaxosController(PaxosServer server) {</span>
+<span class="fc" id="L28">    this.server = server;</span>
+<span class="fc" id="L29">  }</span>
 
   /**
    * Endpoint kliencki do zglaszania propozycji wartosci.
-   *
-   * Propozycja moze zostac przyjeta wylacznie przez lidera.
-   * Jesli serwer nie jest liderem, zwracany jest port aktualnego lidera.
+   * Propozycja moze zostac przyjeta wylacznie przez lidera. Jesli serwer nie jest liderem, zwracany
+   * jest port aktualnego lidera.
    *
    * @param value wartosc proponowana przez klienta
    * @return informacja o przyjeciu propozycji lub o aktualnym liderze
    */
   @PostMapping(&quot;/client_propose&quot;)
   public String propose(@RequestParam Integer value) {
-<span class="fc bfc" id="L44" title="All 2 branches covered.">    if (server.isStuck()) {</span>
-<span class="fc" id="L45">      return server.getStuckMessage();</span>
+<span class="fc bfc" id="L41" title="All 2 branches covered.">    if (server.isStuck()) {</span>
+<span class="fc" id="L42">      return server.getStuckMessage();</span>
     }
-<span class="fc bfc" id="L47" title="All 2 branches covered.">    if (getLeaderPort() != server.getPort()) {</span>
-<span class="fc" id="L48">      return &quot;NOT_LEADER,&quot; + getLeaderPort();</span>
+<span class="fc bfc" id="L44" title="All 2 branches covered.">    if (getLeaderPort() != server.getPort()) {</span>
+<span class="fc" id="L45">      return &quot;NOT_LEADER,&quot; + getLeaderPort();</span>
     }
-<span class="fc" id="L50">    server.startPaxos(value);</span>
-<span class="fc" id="L51">    return &quot;OK: proposal started by leader on port &quot; + server.getPort();</span>
+<span class="fc" id="L47">    server.startPaxos(value);</span>
+<span class="fc" id="L48">    return &quot;OK: proposal started by leader on port &quot; + server.getPort();</span>
   }
 
   /**
@@ -59,10 +56,10 @@ public class PaxosController {
    */
   @PostMapping(&quot;/prepare&quot;)
   public String prepare(@RequestParam long proposalId) {
-<span class="fc bfc" id="L62" title="All 2 branches covered.">    if (server.isStuck()) {</span>
-<span class="fc" id="L63">      return server.getStuckMessage();</span>
+<span class="fc bfc" id="L59" title="All 2 branches covered.">    if (server.isStuck()) {</span>
+<span class="fc" id="L60">      return server.getStuckMessage();</span>
     }
-<span class="fc" id="L65">    return server.prepare(proposalId);</span>
+<span class="fc" id="L62">    return server.prepare(proposalId);</span>
   }
 
 
@@ -70,16 +67,16 @@ public class PaxosController {
    * Obsluguje faze ACCEPT protokolu Paxos.
    *
    * @param proposalId identyfikator propozycji
-   * @param value wartosc do zaakceptowania
+   * @param value      wartosc do zaakceptowania
    * @return odpowiedz ACCEPTED lub REJECTED
    */
   @PostMapping(&quot;/accept&quot;)
   public String accept(@RequestParam long proposalId,
       @RequestParam int value) {
-<span class="fc bfc" id="L79" title="All 2 branches covered.">    if (server.isStuck()) {</span>
-<span class="fc" id="L80">      return server.getStuckMessage();</span>
+<span class="fc bfc" id="L76" title="All 2 branches covered.">    if (server.isStuck()) {</span>
+<span class="fc" id="L77">      return server.getStuckMessage();</span>
     }
-<span class="fc" id="L82">    return server.accept(proposalId, value);</span>
+<span class="fc" id="L79">    return server.accept(proposalId, value);</span>
   }
 
   /**
@@ -89,10 +86,10 @@ public class PaxosController {
    */
   @PostMapping(&quot;/accepted_state&quot;)
   public String state() {
-<span class="fc bfc" id="L92" title="All 2 branches covered.">    if (server.isStuck()) {</span>
-<span class="fc" id="L93">      return server.getStuckMessage();</span>
+<span class="fc bfc" id="L89" title="All 2 branches covered.">    if (server.isStuck()) {</span>
+<span class="fc" id="L90">      return server.getStuckMessage();</span>
     }
-<span class="fc" id="L95">    return server.state();</span>
+<span class="fc" id="L92">    return server.state();</span>
   }
 
   /**
@@ -102,27 +99,26 @@ public class PaxosController {
    */
   @PostMapping(&quot;/election&quot;)
   public String election() {
-<span class="fc bfc" id="L105" title="All 2 branches covered.">    if (server.isStuck()) {</span>
-<span class="fc" id="L106">      return server.getStuckMessage();</span>
+<span class="fc bfc" id="L102" title="All 2 branches covered.">    if (server.isStuck()) {</span>
+<span class="fc" id="L103">      return server.getStuckMessage();</span>
     }
-<span class="fc" id="L108">    return String.valueOf(server.getPort());</span>
+<span class="fc" id="L105">    return String.valueOf(server.getPort());</span>
   }
 
 
   /**
    * Symuluje awarie serwera.
-   *
    * Po wywolaniu serwer przestaje odpowiadac na zadania Paxosa.
    *
    * @return komunikat o awarii
    */
   @PostMapping(&quot;/crash&quot;)
   public String crash() {
-<span class="fc bfc" id="L121" title="All 2 branches covered.">    if (server.isStuck()) {</span>
-<span class="fc" id="L122">      return server.getStuckMessage();</span>
+<span class="fc bfc" id="L117" title="All 2 branches covered.">    if (server.isStuck()) {</span>
+<span class="fc" id="L118">      return server.getStuckMessage();</span>
     }
-<span class="fc" id="L124">    server.crash();</span>
-<span class="fc" id="L125">    return &quot;SERVER_CRASHED&quot;;</span>
+<span class="fc" id="L120">    server.crash();</span>
+<span class="fc" id="L121">    return &quot;SERVER_CRASHED&quot;;</span>
   }
 
   /**
@@ -132,30 +128,29 @@ public class PaxosController {
    */
   @PostMapping(&quot;/clear&quot;)
   public String clear() {
-<span class="fc bfc" id="L135" title="All 2 branches covered.">    if (server.isStuck()) {</span>
-<span class="fc" id="L136">      return server.getStuckMessage();</span>
+<span class="fc bfc" id="L131" title="All 2 branches covered.">    if (server.isStuck()) {</span>
+<span class="fc" id="L132">      return server.getStuckMessage();</span>
     }
-<span class="fc" id="L138">    server.clear();</span>
-<span class="fc" id="L139">    return &quot;STATE_CLEARED&quot;;</span>
+<span class="fc" id="L134">    server.clear();</span>
+<span class="fc" id="L135">    return &quot;STATE_CLEARED&quot;;</span>
   }
 
   /**
    * Czysci stan wszystkich serwerow w systemie.
-   *
    * Operacja moze zostac wykonana wylacznie przez lidera.
    *
    * @return raport z czyszczenia serwerow
    */
   @PostMapping(&quot;/clearall&quot;)
   public String clearAll() {
-<span class="fc bfc" id="L151" title="All 2 branches covered.">    if (server.isStuck()) {</span>
-<span class="fc" id="L152">      return server.getStuckMessage();</span>
+<span class="fc bfc" id="L146" title="All 2 branches covered.">    if (server.isStuck()) {</span>
+<span class="fc" id="L147">      return server.getStuckMessage();</span>
     }
-<span class="fc bfc" id="L154" title="All 2 branches covered.">    if (getLeaderPort() != server.getPort()) {</span>
-<span class="fc" id="L155">      return &quot;NOT_LEADER,&quot; + getLeaderPort();</span>
+<span class="fc bfc" id="L149" title="All 2 branches covered.">    if (getLeaderPort() != server.getPort()) {</span>
+<span class="fc" id="L150">      return &quot;NOT_LEADER,&quot; + getLeaderPort();</span>
     }
 
-<span class="fc" id="L158">    List&lt;String&gt; servers = List.of(</span>
+<span class="fc" id="L153">    List&lt;String&gt; servers = List.of(</span>
         &quot;http://localhost:8000&quot;,
         &quot;http://localhost:8001&quot;,
         &quot;http://localhost:8002&quot;,
@@ -166,28 +161,27 @@ public class PaxosController {
         &quot;http://localhost:8007&quot;
     );
 
-<span class="fc" id="L169">    int count = 0;</span>
-<span class="fc" id="L170">    StringBuilder sb = new StringBuilder();</span>
+<span class="fc" id="L164">    int count = 0;</span>
+<span class="fc" id="L165">    StringBuilder sb = new StringBuilder();</span>
 
-<span class="fc bfc" id="L172" title="All 2 branches covered.">    for (String s : servers) {</span>
-<span class="fc" id="L173">      String resp = HttpUtil.postParams(s + &quot;/clear&quot;);</span>
-<span class="fc" id="L174">      sb.append(s).append(&quot; =&gt; &quot;).append(resp).append(&quot;\n&quot;);</span>
-<span class="fc bfc" id="L175" title="All 2 branches covered.">      if (resp != null) {</span>
-<span class="fc" id="L176">        count++;</span>
+<span class="fc bfc" id="L167" title="All 2 branches covered.">    for (String s : servers) {</span>
+<span class="fc" id="L168">      String resp = HttpUtil.postParams(s + &quot;/clear&quot;);</span>
+<span class="fc" id="L169">      sb.append(s).append(&quot; =&gt; &quot;).append(resp).append(&quot;\n&quot;);</span>
+<span class="fc bfc" id="L170" title="All 2 branches covered.">      if (resp != null) {</span>
+<span class="fc" id="L171">        count++;</span>
       }
-<span class="fc" id="L178">    }</span>
+<span class="fc" id="L173">    }</span>
 
-<span class="fc" id="L180">    return &quot;CLEARED: &quot; + count + &quot;\n&quot; + sb;</span>
+<span class="fc" id="L175">    return &quot;CLEARED: &quot; + count + &quot;\n&quot; + sb;</span>
   }
 
   /**
    * Recznie wstrzykuje wartosci do stanu serwera.
-   *
    * Wykorzystywane glownie w testach i symulacjach bledow.
    *
-   * @param promised nowa wartosc promised
+   * @param promised         nowa wartosc promised
    * @param acceptedProposal nowy numer zaakceptowanej propozycji
-   * @param acceptedValue nowa zaakceptowana wartosc
+   * @param acceptedValue    nowa zaakceptowana wartosc
    * @return status operacji
    */
   @PostMapping(&quot;/inject&quot;)
@@ -196,21 +190,21 @@ public class PaxosController {
       @RequestParam(required = false) Integer acceptedProposal,
       @RequestParam(required = false) Integer acceptedValue
   ) {
-<span class="fc bfc" id="L199" title="All 2 branches covered.">    if (server.isStuck()) {</span>
-<span class="fc" id="L200">      return server.getStuckMessage();</span>
+<span class="fc bfc" id="L193" title="All 2 branches covered.">    if (server.isStuck()) {</span>
+<span class="fc" id="L194">      return server.getStuckMessage();</span>
     }
 
-<span class="fc bfc" id="L203" title="All 2 branches covered.">    if (promised != null) {</span>
-<span class="fc" id="L204">      server.injectPromised(promised);</span>
+<span class="fc bfc" id="L197" title="All 2 branches covered.">    if (promised != null) {</span>
+<span class="fc" id="L198">      server.injectPromised(promised);</span>
     }
-<span class="fc bfc" id="L206" title="All 2 branches covered.">    if (acceptedProposal != null) {</span>
-<span class="fc" id="L207">      server.injectAcceptedProposal(acceptedProposal);</span>
+<span class="fc bfc" id="L200" title="All 2 branches covered.">    if (acceptedProposal != null) {</span>
+<span class="fc" id="L201">      server.injectAcceptedProposal(acceptedProposal);</span>
     }
-<span class="fc bfc" id="L209" title="All 2 branches covered.">    if (acceptedValue != null) {</span>
-<span class="fc" id="L210">      server.injectAcceptedValue(acceptedValue);</span>
+<span class="fc bfc" id="L203" title="All 2 branches covered.">    if (acceptedValue != null) {</span>
+<span class="fc" id="L204">      server.injectAcceptedValue(acceptedValue);</span>
     }
 
-<span class="fc" id="L213">    return &quot;INJECT_OK&quot;;</span>
+<span class="fc" id="L207">    return &quot;INJECT_OK&quot;;</span>
   }
 
   /**
@@ -220,11 +214,11 @@ public class PaxosController {
    */
   @PostMapping(&quot;/rollback&quot;)
   public String rollback() {
-<span class="fc bfc" id="L223" title="All 2 branches covered.">    if (server.isStuck()) {</span>
-<span class="fc" id="L224">      return server.getStuckMessage();</span>
+<span class="fc bfc" id="L217" title="All 2 branches covered.">    if (server.isStuck()) {</span>
+<span class="fc" id="L218">      return server.getStuckMessage();</span>
     }
-<span class="fc" id="L226">    server.rollback();</span>
-<span class="fc" id="L227">    return &quot;ROLLED_BACK&quot;;</span>
+<span class="fc" id="L220">    server.rollback();</span>
+<span class="fc" id="L221">    return &quot;ROLLED_BACK&quot;;</span>
   }
 
   /**
@@ -235,8 +229,8 @@ public class PaxosController {
    */
   @PostMapping(&quot;/stuck&quot;)
   public String stuck(@RequestParam String msg) {
-<span class="fc" id="L238">    server.stuck(msg);</span>
-<span class="fc" id="L239">    return &quot;Zablokowany z wiadomoscia:&quot; + msg;</span>
+<span class="fc" id="L232">    server.stuck(msg);</span>
+<span class="fc" id="L233">    return &quot;Zablokowany z wiadomoscia:&quot; + msg;</span>
   }
 
 
@@ -247,20 +241,19 @@ public class PaxosController {
    */
   @PostMapping(&quot;/unstuck&quot;)
   public String unstuck() {
-<span class="fc" id="L250">    server.unstuck();</span>
-<span class="fc" id="L251">    return &quot;Odblokowany&quot;;</span>
+<span class="fc" id="L244">    server.unstuck();</span>
+<span class="fc" id="L245">    return &quot;Odblokowany&quot;;</span>
   }
 
   /**
-   * Pobranie portu lidera
+   * Pobranie portu lidera.
    *
    * @return port lidera
    */
   @PostMapping(&quot;/leader&quot;)
   public String leader() {
-<span class="fc" id="L261">    return String.valueOf(getLeaderPort());</span>
+<span class="fc" id="L255">    return String.valueOf(getLeaderPort());</span>
   }
-
 
 
 }

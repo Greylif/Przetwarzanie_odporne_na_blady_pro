@@ -6,14 +6,13 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * Glowna klasa startowa aplikacji Spring Boot.
- *
  */
 @SpringBootApplication
 @EnableScheduling
 public class ProSpringApplication {
 
   /**
-   * Start aplikacji
+   * Start aplikacji.
    *
    * @param args argumenty linii polecen
    */

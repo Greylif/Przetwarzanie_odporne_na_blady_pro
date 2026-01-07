@@ -1,5 +1,6 @@
 package com.example.pro_spring;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -148,13 +149,21 @@ class ControllerTests {
     @Test
     @DisplayName("Serwer jest liderem - wywoluje clearall")
     void clearAllLeader() throws Exception {
-      when(server.getPort()).thenReturn(8000);
-        PaxosServer.setLeaderPort(8000);
 
-      mockMvc.perform(post("/clearall"))
-          .andExpect(status().isOk())
-          .andExpect(content().string(org.hamcrest.Matchers.containsString("CLEARED")));
+      PaxosServer.setLeaderPort(8000);
+      when(server.getPort()).thenReturn(8000);
+
+      try (MockedStatic<HttpUtil> http = mockStatic(HttpUtil.class)) {
+
+        http.when(() -> HttpUtil.postParams(contains("/clear")))
+            .thenReturn("CLEARED");
+
+        mockMvc.perform(post("/clearall"))
+            .andExpect(status().isOk())
+            .andExpect(content().string(containsString("CLEARED")));
+      }
     }
+
 
     @Test
     @DisplayName("/clearall – resp != null zwieksza licznik")
@@ -170,7 +179,26 @@ class ControllerTests {
 
         mockMvc.perform(post("/clearall"))
             .andExpect(status().isOk())
-            .andExpect(content().string(org.hamcrest.Matchers.containsString("CLEARED: 8")));
+            .andExpect(content().string(containsString("CLEARED: 8")));
+      }
+    }
+
+
+    @Test
+    @DisplayName("/clearall – resp == null NIE zwiększa licznika")
+    void clearAllCountsNullResponses() throws Exception {
+      when(server.isStuck()).thenReturn(false);
+      when(server.getPort()).thenReturn(8000);
+      PaxosServer.setLeaderPort(8000);
+
+      try (MockedStatic<HttpUtil> httpMock = mockStatic(HttpUtil.class)) {
+
+        httpMock.when(() -> HttpUtil.postParams(anyString()))
+            .thenReturn(null);
+
+        mockMvc.perform(post("/clearall"))
+            .andExpect(status().isOk())
+            .andExpect(content().string(containsString("CLEARED: 0")));
       }
     }
 

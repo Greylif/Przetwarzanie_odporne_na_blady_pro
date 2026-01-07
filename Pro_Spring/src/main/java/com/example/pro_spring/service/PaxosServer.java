@@ -1,5 +1,6 @@
 package com.example.pro_spring.service;
 
+import com.example.pro_spring.exception.ServerException;
 import com.example.pro_spring.model.Promise;
 import com.example.pro_spring.util.HttpUtil;
 import jakarta.annotation.PostConstruct;
@@ -55,15 +56,16 @@ public class PaxosServer {
   @Getter
   private volatile String stuckMessage = "STUCK";
 
+  private static final String LOCALHOST = "http://localhost:";
 
   /**
    * Tworzy instancje serwera Paxos.
    *
-   * @param port port HTTP serwera
-   * @param id identyfikator
-   * @param leader port poczatkowego lidera
+   * @param port     port HTTP serwera
+   * @param id       identyfikator
+   * @param leader   port poczatkowego lidera
    * @param executor executor watkow
-   * @param ctx kontekst Springa
+   * @param ctx      kontekst Springa
    */
   public PaxosServer(@Value("${server.port}") int port, @Value("${paxos.id}") int id,
       @Value("${paxos.leaderPort}") int leader, ThreadPoolTaskExecutor executor,
@@ -78,33 +80,74 @@ public class PaxosServer {
     System.out.printf(" SERVER %d Wlaczony na porcie %d (leader=%d) %n", id, port, leaderPort);
   }
 
+  /**
+   * Zwraca port aktualnego lidera.
+   */
+  public static synchronized int getLeaderPort() {
+    return leaderPort;
+  }
+
+  /**
+   * Ustawia nowy port lidera.
+   */
+  public static synchronized void setLeaderPort(int p) {
+    if (leaderPort == p) {
+      return;
+    }
+
+    System.out.printf("LEADER CHANGE: %d -> %d%n", leaderPort, p);
+    leaderPort = p;
+  }
+
+  /**
+   * Sprawdza, czy serwer pod wskazanym adresem odpowiada na zapytania.
+   *
+   * @param url adres serwera
+   * @return true jesli serwer odpowiada poprawnym stanem, false w przeciwnym razie
+   */
+  private static boolean isAlive(String url) {
+    try {
+      String resp = HttpUtil.postParams(url + "/accepted_state");
+      return resp != null && resp.startsWith("STATE");
+    } catch (ServerException e) {
+      return false;
+    }
+  }
+
   private Integer discoverLeaderFromCluster() {
 
     Integer bestLeader = null;
 
     for (String s : SERVERS) {
+
       try {
         String resp = HttpUtil.postParams(s + "/leader");
-        if (resp == null) continue;
 
-        int leader = Integer.parseInt(resp.trim());
-
-        if (!isAlive("http://localhost:" + leader)) {
+        if (resp == null) {
           continue;
         }
 
-        if (bestLeader == null || leader < bestLeader) {
+        int leader = Integer.parseInt(resp.trim());
+
+        boolean alive = isAlive(LOCALHOST + leader);
+        boolean betterThanCurrent =
+            bestLeader == null || leader < bestLeader;
+
+        if (alive && betterThanCurrent) {
           bestLeader = leader;
         }
 
-      } catch (Exception ignored) {}
+      } catch (ServerException e) {
+        System.out.printf("[SERVER %d] %s niedostepny%n", port, s);
+      }
     }
 
     return bestLeader;
   }
 
-
-
+  /**
+   * Przy starcie programu wykrywa czy już został ustalony lider, jeżeli nie rozpoczona elekcję.
+   */
   @PostConstruct
   public void discoverLeaderOnStartup() {
     executor.submit(() -> {
@@ -122,41 +165,6 @@ public class PaxosServer {
 
       electNewLeader();
     });
-  }
-
-
-
-  /**
-   * Zwraca port aktualnego lidera.
-   */
-  public static synchronized int getLeaderPort() {
-    return leaderPort;
-  }
-
-  /**
-   * Ustawia nowy port lidera.
-   */
-  public static synchronized void setLeaderPort(int p) {
-    if (leaderPort == p) return;
-
-    System.out.printf("LEADER CHANGE: %d -> %d%n", leaderPort, p);
-    leaderPort = p;
-  }
-
-
-  /**
-   * Sprawdza, czy serwer pod wskazanym adresem odpowiada na zapytania.
-   *
-   * @param url adres serwera
-   * @return true jesli serwer odpowiada poprawnym stanem, false w przeciwnym razie
-   */
-  private static boolean isAlive(String url) {
-    try {
-      String resp = HttpUtil.postParams(url + "/accepted_state");
-      return resp != null && resp.startsWith("STATE");
-    } catch (Exception e) {
-      return false;
-    }
   }
 
   /**
@@ -205,7 +213,7 @@ public class PaxosServer {
       return;
     }
 
-    if (!isAlive("http://localhost:" + leader)) {
+    if (!isAlive(LOCALHOST + leader)) {
       System.out.printf(
           "[SERVER %d] Leader %d nie żyje – start elekcji%n",
           port, leader
@@ -215,7 +223,7 @@ public class PaxosServer {
   }
 
   /**
-   * Ustalenie portu lidera po powrocie z stanu stuck
+   * Ustalenie portu lidera po powrocie z stanu stuck.
    */
   private void discoverLeaderOnRecovery() {
     Integer discovered = discoverLeaderFromCluster();
@@ -233,8 +241,8 @@ public class PaxosServer {
   private void electNewLeader() {
 
     int currentLeader = getLeaderPort();
-    if (currentLeader != port &&
-        isAlive("http://localhost:" + currentLeader)) {
+    if (currentLeader != port
+        && isAlive(LOCALHOST + currentLeader)) {
       return;
     }
 
@@ -270,7 +278,6 @@ public class PaxosServer {
 
     System.out.printf("[SERVER %d] Nowy leader wybrany = %d%n", port, winner);
   }
-
 
 
   /**
@@ -358,7 +365,7 @@ public class PaxosServer {
   /**
    * Realizuje faze PREPARE protokolu Paxos.
    *
-   * @param alive lista aktywnych serwerow
+   * @param alive      lista aktywnych serwerow
    * @param proposalId identyfikator propozycji
    * @return lista otrzymanych obietnic (PROMISE)
    */
@@ -409,7 +416,7 @@ public class PaxosServer {
   /**
    * Wybiera wartosc do zaakceptowania na podstawie otrzymanych PROMISE.
    *
-   * @param promises lista obietnic od acceptorow
+   * @param promises    lista obietnic od acceptorow
    * @param clientValue wartosc zaproponowana przez klienta
    * @return wybrana wartosc lub null jesli brak wiekszosci
    */
@@ -434,9 +441,9 @@ public class PaxosServer {
   /**
    * Realizuje faze ACCEPT protokolu Paxos.
    *
-   * @param alive lista aktywnych serwerow
+   * @param alive      lista aktywnych serwerow
    * @param proposalId identyfikator propozycji
-   * @param value wartosc do zaakceptowania
+   * @param value      wartosc do zaakceptowania
    * @return liczba serwerow, ktore zaakceptowaly wartosc
    */
   private int acceptPhase(List<String> alive, long proposalId, int value) {
@@ -570,7 +577,7 @@ public class PaxosServer {
    * Obsluguje zadanie ACCEPT jako acceptor.
    *
    * @param proposalId identyfikator propozycji
-   * @param value wartosc do zaakceptowania
+   * @param value      wartosc do zaakceptowania
    * @return odpowiedz ACCEPTED, REJECT lub komunikat blokady
    */
   public synchronized String accept(long proposalId, int value) {

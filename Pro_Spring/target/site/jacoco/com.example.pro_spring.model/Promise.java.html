@@ -4,12 +4,11 @@
 /**
  * Reprezentuje odpowiedz typu PROMISE w protokole Paxos.
  *
- * @param promised informacja, czy serwer zlozyl obietnice
+ * @param promised         informacja, czy serwer zlozyl obietnice
  * @param acceptedProposal identyfikator wczesniej zaakceptowanej propozycji lub -1, jesli brak
- * @param acceptedValue wartosc zaakceptowana wraz z acceptedProposal lub -1, jesli brak
- *
+ * @param acceptedValue    wartosc zaakceptowana wraz z acceptedProposal lub -1, jesli brak
  */
-<span class="fc" id="L12">public record Promise(</span>
+<span class="fc" id="L11">public record Promise(</span>
     boolean promised,
     int acceptedProposal,
     int acceptedValue

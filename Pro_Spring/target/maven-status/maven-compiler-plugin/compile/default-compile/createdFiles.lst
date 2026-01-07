@@ -2,5 +2,8 @@ com\example\pro_spring\service\PaxosServer.class
 com\example\pro_spring\config\ExecutorConfig.class
 com\example\pro_spring\controller\PaxosController.class
 com\example\pro_spring\ProSpringApplication.class
+com\example\pro_spring\exception\ServerException.class
+com\example\pro_spring\exception\HttpUtilException.class
+com\example\pro_spring\exception\GlobalExceptionHandler.class
 com\example\pro_spring\model\Promise.class
 com\example\pro_spring\util\HttpUtil.class

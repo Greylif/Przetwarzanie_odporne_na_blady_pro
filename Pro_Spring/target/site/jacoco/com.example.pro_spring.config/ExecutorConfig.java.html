@@ -7,12 +7,11 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 /**
  * Konfiguracja puli watkow uzywanej w aplikacji.
- *
- * Klasa definiuje bean ThreadPoolTaskExecutor, ktory jest wykorzystywany do asynchronicznego uruchamiania rund protokolu Paxos.
- *
+ * Klasa definiuje bean ThreadPoolTaskExecutor, ktory jest wykorzystywany do asynchronicznego
+ * uruchamiania rund protokolu Paxos.
  */
 @Configuration
-<span class="fc" id="L15">public class ExecutorConfig {</span>
+<span class="fc" id="L14">public class ExecutorConfig {</span>
 
   /**
    * Tworzy i konfiguruje pule watkow dla zadan asynchronicznych.
@@ -21,11 +20,11 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
    */
   @Bean
   public ThreadPoolTaskExecutor executor() {
-<span class="fc" id="L24">    ThreadPoolTaskExecutor exec = new ThreadPoolTaskExecutor();</span>
-<span class="fc" id="L25">    exec.setCorePoolSize(16);</span>
-<span class="fc" id="L26">    exec.setMaxPoolSize(32);</span>
-<span class="fc" id="L27">    exec.initialize();</span>
-<span class="fc" id="L28">    return exec;</span>
+<span class="fc" id="L23">    ThreadPoolTaskExecutor exec = new ThreadPoolTaskExecutor();</span>
+<span class="fc" id="L24">    exec.setCorePoolSize(16);</span>
+<span class="fc" id="L25">    exec.setMaxPoolSize(32);</span>
+<span class="fc" id="L26">    exec.initialize();</span>
+<span class="fc" id="L27">    return exec;</span>
   }
 }
 </pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

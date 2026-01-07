@@ -1,15 +1,16 @@
 package com.example.pro_spring.util;
 
+import com.example.pro_spring.exception.HttpUtilException;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 /**
  * Klasa wykorzystywana do komunikacji HTTP pomiedzy serwerami Paxosa.
- *
  */
 public class HttpUtil {
 
@@ -40,8 +41,8 @@ public class HttpUtil {
       ResponseEntity<String> resp = rest.exchange(url, HttpMethod.POST, entity, String.class);
       return resp.getBody();
 
-    } catch (Exception e) {
-      return null;
+    } catch (RestClientException e) {
+      throw new HttpUtilException("HTTP communication failed for URL: " + url, e);
     }
   }
 }
