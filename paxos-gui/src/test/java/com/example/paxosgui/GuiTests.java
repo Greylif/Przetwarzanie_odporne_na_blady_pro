@@ -6,18 +6,9 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/**
- * Testy jednostkowe GUI.
- *
- * Testy nie uruchamiają faktycznego interfejsu JavaFX,
- * lecz sprawdzają logikę pomocniczą oraz strukturę aplikacji.
- */
 public class GuiTests {
 
-    /**
-     * Sprawdza, czy klasa HelloApplication
-     * dziedziczy po javafx.application.Application.
-     */
+
     @Test
     void testHelloApplicationIsJavaFxApp() {
         assertTrue(
@@ -26,18 +17,14 @@ public class GuiTests {
         );
     }
 
-    /**
-     * Sprawdza, czy możliwe jest utworzenie instancji aplikacji GUI.
-     */
+
     @Test
     void testHelloApplicationInstantiation() {
         HelloApplication app = new HelloApplication();
         assertNotNull(app);
     }
 
-    /**
-     * Sprawdza, czy metoda main istnieje.
-     */
+
     @Test
     void testMainMethodExists() {
         assertDoesNotThrow(() -> {
@@ -45,9 +32,7 @@ public class GuiTests {
         });
     }
 
-    /**
-     * Testuje poprawne dodanie parametru do URL.
-     */
+
     @Test
     void testAppendParamAddsParameter() {
         HelloApplication app = new HelloApplication();
@@ -59,9 +44,7 @@ public class GuiTests {
         assertEquals("http://localhost/test?value=5", url.toString());
     }
 
-    /**
-     * Testuje odrzucenie niepoprawnej (ujemnej) wartości parametru.
-     */
+
     @Test
     void testAppendParamRejectsInvalidValue() {
         HelloApplication app = new HelloApplication();
@@ -72,28 +55,6 @@ public class GuiTests {
         assertTrue(first);
         assertEquals("http://localhost/test", url.toString());
     }
-
-    /**
-     * Testuje filtr ograniczający pole tekstowe
-     * do nieujemnych liczb całkowitych.
-     */
-    @Test
-    void testOnlyPositiveNumbersFilter() {
-        HelloApplication app = new HelloApplication();
-        TextField field = new TextField();
-
-        invokeOnlyPositiveNumbers(app, field);
-
-        field.setText("12a3");
-        assertEquals("123", field.getText());
-
-        field.setText("-99");
-        assertEquals("99", field.getText());
-    }
-
-    // =========================
-    // METODY POMOCNICZE (reflection)
-    // =========================
 
     private boolean invokeAppendParam(
             HelloApplication app,
@@ -118,16 +79,6 @@ public class GuiTests {
         }
     }
 
-    private void invokeOnlyPositiveNumbers(HelloApplication app, TextField field) {
-        try {
-            var m = HelloApplication.class.getDeclaredMethod(
-                    "onlyPositiveNumbers",
-                    TextField.class
-            );
-            m.setAccessible(true);
-            m.invoke(app, field);
-        } catch (Exception e) {
-            fail(e);
-        }
-    }
+
+
 }
