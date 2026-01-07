@@ -7,9 +7,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 
 /**
- * Globalny handler wyjątków dla aplikacji Spring MVC.
- * Przechwytuje wyjątki rzucane w warstwie kontrolerów
- * i mapuje je na odpowiednie widoki błędów oraz kody HTTP.
+ * Globalny handler wyjątków
  */
 @ControllerAdvice
 public class GlobalExceptionHandler {
