@@ -24,21 +24,21 @@ class ExceptionTests {
   class HttpUtilExceptionTests {
 
     @Test
-    @DisplayName("Tworzy wyjątek tylko z wiadomością")
+    @DisplayName("Tworzy wyjatek tylko z wiadomoscia")
     void shouldCreateWithMessageOnly() {
-      HttpUtilException ex = new HttpUtilException("Błąd klienta");
+      HttpUtilException ex = new HttpUtilException("Blad klienta");
 
-      assertEquals("Błąd klienta", ex.getMessage());
+      assertEquals("Blad klienta", ex.getMessage());
       assertNull(ex.getCause());
     }
 
     @Test
-    @DisplayName("Tworzy wyjątek z wiadomością i przyczyną")
+    @DisplayName("Tworzy wyjatek z wiadomoscia i przyczyna")
     void shouldCreateWithMessageAndCause() {
       Throwable cause = new IllegalArgumentException("Przyczyna");
-      HttpUtilException ex = new HttpUtilException("Błąd klienta", cause);
+      HttpUtilException ex = new HttpUtilException("Blad klienta", cause);
 
-      assertEquals("Błąd klienta", ex.getMessage());
+      assertEquals("Blad klienta", ex.getMessage());
       assertEquals(cause, ex.getCause());
     }
   }
@@ -49,28 +49,28 @@ class ExceptionTests {
   class ServerExceptionTests {
 
     @Test
-    @DisplayName("Tworzy wyjątek tylko z wiadomością")
+    @DisplayName("Tworzy wyjatek tylko z wiadomoscia")
     void shouldCreateWithMessageOnly() {
-      ServerException ex = new ServerException("Błąd serwera");
+      ServerException ex = new ServerException("Blad serwera");
 
-      assertEquals("Błąd serwera", ex.getMessage());
+      assertEquals("Blad serwera", ex.getMessage());
       assertNull(ex.getCause());
     }
 
     @Test
-    @DisplayName("Tworzy wyjątek z wiadomością i przyczyną")
+    @DisplayName("Tworzy wyjatek z wiadomoscia i przyczyna")
     void shouldCreateWithMessageAndCause() {
       Throwable cause = new RuntimeException("Przyczyna");
-      ServerException ex = new ServerException("Błąd serwera", cause);
+      ServerException ex = new ServerException("Blad serwera", cause);
 
-      assertEquals("Błąd serwera", ex.getMessage());
+      assertEquals("Blad serwera", ex.getMessage());
       assertEquals(cause, ex.getCause());
     }
   }
 
 
   @Nested
-  @DisplayName("GlobalExceptionHandler – obsługa wyjątków MVC")
+  @DisplayName("GlobalExceptionHandler – obsluga wyjatkow MVC")
   @WebMvcTest(TestExceptionController.class)
   @Import(GlobalExceptionHandler.class)
   class GlobalExceptionHandlerTests {
@@ -79,33 +79,33 @@ class ExceptionTests {
     private MockMvc mockMvc;
 
     @Test
-    @DisplayName("Obsługuje HttpUtilException i zwraca 400")
+    @DisplayName("Obsluguje HttpUtilException i zwraca 400")
     void shouldHandleHttpUtilException() throws Exception {
       mockMvc.perform(get("/http-util-error"))
           .andExpect(status().isBadRequest())
           .andExpect(view().name("error"))
           .andExpect(model().attribute("errorTitle", "Client Error"))
-          .andExpect(model().attribute("errorMessage", "Błąd klienta"));
+          .andExpect(model().attribute("errorMessage", "Blad klienta"));
     }
 
     @Test
-    @DisplayName("Obsługuje ServerException i zwraca 500")
+    @DisplayName("Obsluguje ServerException i zwraca 500")
     void shouldHandleServerException() throws Exception {
       mockMvc.perform(get("/server-error"))
           .andExpect(status().isInternalServerError())
           .andExpect(view().name("error"))
           .andExpect(model().attribute("errorTitle", "Server Error"))
-          .andExpect(model().attribute("errorMessage", "Błąd serwera"));
+          .andExpect(model().attribute("errorMessage", "Blad serwera"));
     }
 
     @Test
-    @DisplayName("Obsługuje nieoczekiwany wyjątek i zwraca 500")
+    @DisplayName("Obsluguje nieoczekiwany wyjatek i zwraca 500")
     void shouldHandleUnexpectedException() throws Exception {
       mockMvc.perform(get("/unexpected-error"))
           .andExpect(status().isInternalServerError())
           .andExpect(view().name("error"))
           .andExpect(model().attribute("errorTitle", "Unexpected Error"))
-          .andExpect(model().attribute("errorMessage", "Nieoczekiwany błąd"));
+          .andExpect(model().attribute("errorMessage", "Nieoczekiwany blad"));
     }
   }
 
@@ -114,17 +114,17 @@ class ExceptionTests {
 
     @GetMapping("/http-util-error")
     public String throwHttpUtilException() {
-      throw new HttpUtilException("Błąd klienta");
+      throw new HttpUtilException("Blad klienta");
     }
 
     @GetMapping("/server-error")
     public String throwServerException() {
-      throw new ServerException("Błąd serwera");
+      throw new ServerException("Blad serwera");
     }
 
     @GetMapping("/unexpected-error")
     public String throwUnexpectedException() {
-      throw new RuntimeException("Nieoczekiwany błąd");
+      throw new RuntimeException("Nieoczekiwany blad");
     }
   }
 }

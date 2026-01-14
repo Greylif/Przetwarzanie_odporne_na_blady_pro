@@ -1,24 +1,24 @@
 package com.example.pro_spring.exception;
 
 /**
- * Wyjątek reprezentujący błąd w HttpUtil.
+ * Wyjatek reprezentujacy blad w HttpUtil.
  */
 public class HttpUtilException extends RuntimeException {
 
   /**
-   * Tworzy nowy wyjątek z podaną wiadomością.
+   * Tworzy nowy wyjatek z podana wiadomoscia.
    *
-   * @param message opis błędu
+   * @param message opis bledu
    */
   public HttpUtilException(String message) {
     super(message);
   }
 
   /**
-   * Tworzy nowy wyjątek z wiadomością oraz pierwotną przyczyną.
+   * Tworzy nowy wyjatek z wiadomoscia oraz pierwotna przyczyna.
    *
-   * @param message opis błędua
-   * @param cause oryginalny wyjątek
+   * @param message opis bledua
+   * @param cause oryginalny wyjatek
    */
   public HttpUtilException(String message, Throwable cause) {
     super(message, cause);

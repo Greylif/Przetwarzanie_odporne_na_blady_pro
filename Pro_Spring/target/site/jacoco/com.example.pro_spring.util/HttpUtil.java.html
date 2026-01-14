@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="pl"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../jacoco-resources/report.css" type="text/css"/><link rel="shortcut icon" href="../jacoco-resources/report.gif" type="image/gif"/><title>HttpUtil.java</title><link rel="stylesheet" href="../jacoco-resources/prettify.css" type="text/css"/><script type="text/javascript" src="../jacoco-resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../jacoco-sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">Pro_Spring</a> &gt; <a href="index.source.html" class="el_package">com.example.pro_spring.util</a> &gt; <span class="el_source">HttpUtil.java</span></div><h1>HttpUtil.java</h1><pre class="source lang-java linenums">package com.example.pro_spring.util;
 
-import com.example.pro_spring.exception.HttpUtilException;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -14,15 +13,15 @@ import org.springframework.web.client.RestTemplate;
  */
 public class HttpUtil {
 
-<span class="fc" id="L17">  private static final RestTemplate rest = new RestTemplate();</span>
+<span class="fc" id="L16">  private static final RestTemplate rest = new RestTemplate();</span>
 
   /**
    * Prywatny konstruktor zapobiegajacy tworzeniu instancji klasy.
    *
    * @throws UnsupportedOperationException zawsze
    */
-<span class="fc" id="L24">  private HttpUtil() {</span>
-<span class="fc" id="L25">    throw new UnsupportedOperationException(&quot;&quot;);</span>
+<span class="fc" id="L23">  private HttpUtil() {</span>
+<span class="fc" id="L24">    throw new UnsupportedOperationException(&quot;&quot;);</span>
   }
 
 
@@ -34,16 +33,18 @@ public class HttpUtil {
    */
   public static String postParams(String url) {
     try {
-<span class="fc" id="L37">      HttpHeaders headers = new HttpHeaders();</span>
-<span class="fc" id="L38">      headers.setContentType(MediaType.TEXT_PLAIN);</span>
-<span class="fc" id="L39">      HttpEntity&lt;String&gt; entity = new HttpEntity&lt;&gt;(&quot;&quot;, headers);</span>
+<span class="fc" id="L36">      HttpHeaders headers = new HttpHeaders();</span>
+<span class="fc" id="L37">      headers.setContentType(MediaType.TEXT_PLAIN);</span>
+<span class="fc" id="L38">      HttpEntity&lt;String&gt; entity = new HttpEntity&lt;&gt;(&quot;&quot;, headers);</span>
 
-<span class="fc" id="L41">      ResponseEntity&lt;String&gt; resp = rest.exchange(url, HttpMethod.POST, entity, String.class);</span>
+<span class="fc" id="L40">      ResponseEntity&lt;String&gt; resp =</span>
+<span class="fc" id="L41">          rest.exchange(url, HttpMethod.POST, entity, String.class);</span>
 <span class="fc" id="L42">      return resp.getBody();</span>
 
 <span class="fc" id="L44">    } catch (RestClientException e) {</span>
-<span class="fc" id="L45">      throw new HttpUtilException(&quot;HTTP communication failed for URL: &quot; + url, e);</span>
+<span class="fc" id="L45">      return null;</span>
     }
   }
+
 }
 </pre><div class="footer"><span class="right">Created with <a href="http://www.jacoco.org/jacoco">JaCoCo</a> 0.8.11.202310140853</span></div></body></html>

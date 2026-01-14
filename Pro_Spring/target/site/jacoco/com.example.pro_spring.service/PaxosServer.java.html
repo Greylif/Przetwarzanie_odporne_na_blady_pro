@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import lombok.Getter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -24,7 +26,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class PaxosServer {
 
-<span class="fc" id="L27">  private static final List&lt;String&gt; SERVERS = List.of(</span>
+<span class="fc" id="L29">  private static final List&lt;String&gt; SERVERS = List.of(</span>
       &quot;http://localhost:8000&quot;,
       &quot;http://localhost:8001&quot;,
       &quot;http://localhost:8002&quot;,
@@ -44,17 +46,19 @@ public class PaxosServer {
   private final int port;
   private final ThreadPoolTaskExecutor executor;
   private final ConfigurableApplicationContext ctx;
-<span class="fc" id="L47">  private volatile boolean running = true;</span>
-<span class="fc" id="L48">  private int promisedProposal = -1;</span>
-<span class="fc" id="L49">  private int acceptedProposal = -1;</span>
-<span class="fc" id="L50">  private int acceptedValue = -1;</span>
-<span class="fc" id="L51">  private int prevPromisedProposal = -1;</span>
-<span class="fc" id="L52">  private int prevAcceptedProposal = -1;</span>
-<span class="fc" id="L53">  private int prevAcceptedValue = -1;</span>
-<span class="fc" id="L54">  @Getter</span>
-  private volatile boolean stuck = false;
+<span class="fc" id="L49">  private volatile boolean running = true;</span>
+<span class="fc" id="L50">  private int promisedProposal = -1;</span>
+<span class="fc" id="L51">  private int acceptedProposal = -1;</span>
+<span class="fc" id="L52">  private int acceptedValue = -1;</span>
+<span class="fc" id="L53">  private int prevPromisedProposal = -1;</span>
+<span class="fc" id="L54">  private int prevAcceptedProposal = -1;</span>
+<span class="fc" id="L55">  private int prevAcceptedValue = -1;</span>
 <span class="fc" id="L56">  @Getter</span>
+  private volatile boolean stuck = false;
+<span class="fc" id="L58">  @Getter</span>
   private volatile String stuckMessage = &quot;STUCK&quot;;
+
+<span class="fc" id="L61">  private static final Logger log = LoggerFactory.getLogger(PaxosServer.class);</span>
 
   private static final String LOCALHOST = &quot;http://localhost:&quot;;
 
@@ -70,34 +74,34 @@ public class PaxosServer {
   public PaxosServer(@Value(&quot;${server.port}&quot;) int port, @Value(&quot;${paxos.id}&quot;) int id,
       @Value(&quot;${paxos.leaderPort}&quot;) int leader, ThreadPoolTaskExecutor executor,
       ConfigurableApplicationContext ctx
-<span class="fc" id="L73">  ) {</span>
-<span class="fc" id="L74">    this.port = port;</span>
-<span class="fc" id="L75">    this.id = id;</span>
-<span class="fc" id="L76">    this.executor = executor;</span>
-<span class="fc" id="L77">    this.ctx = ctx;</span>
-<span class="fc" id="L78">    setLeaderPort(leader);</span>
+<span class="fc" id="L77">  ) {</span>
+<span class="fc" id="L78">    this.port = port;</span>
+<span class="fc" id="L79">    this.id = id;</span>
+<span class="fc" id="L80">    this.executor = executor;</span>
+<span class="fc" id="L81">    this.ctx = ctx;</span>
+<span class="fc" id="L82">    setLeaderPort(leader);</span>
 
-<span class="fc" id="L80">    System.out.printf(&quot; SERVER %d Wlaczony na porcie %d (leader=%d) %n&quot;, id, port, leaderPort);</span>
-<span class="fc" id="L81">  }</span>
+<span class="fc" id="L84">    log.info(&quot; SERVER {} Wlaczony na porcie {} (leader={}) %n&quot;, id, port, leaderPort);</span>
+<span class="fc" id="L85">  }</span>
 
   /**
    * Zwraca port aktualnego lidera.
    */
   public static synchronized int getLeaderPort() {
-<span class="fc" id="L87">    return leaderPort;</span>
+<span class="fc" id="L91">    return leaderPort;</span>
   }
 
   /**
    * Ustawia nowy port lidera.
    */
   public static synchronized void setLeaderPort(int p) {
-<span class="fc bfc" id="L94" title="All 2 branches covered.">    if (leaderPort == p) {</span>
-<span class="fc" id="L95">      return;</span>
+<span class="fc bfc" id="L98" title="All 2 branches covered.">    if (leaderPort == p) {</span>
+<span class="fc" id="L99">      return;</span>
     }
 
-<span class="fc" id="L98">    System.out.printf(&quot;LEADER CHANGE: %d -&gt; %d%n&quot;, leaderPort, p);</span>
-<span class="fc" id="L99">    leaderPort = p;</span>
-<span class="fc" id="L100">  }</span>
+<span class="fc" id="L102">    log.info(&quot;LEADER CHANGE: {} -&gt; {}%n&quot;, leaderPort, p);</span>
+<span class="fc" id="L103">    leaderPort = p;</span>
+<span class="fc" id="L104">  }</span>
 
   /**
    * Sprawdza, czy serwer pod wskazanym adresem odpowiada na zapytania.
@@ -107,42 +111,43 @@ public class PaxosServer {
    */
   private static boolean isAlive(String url) {
     try {
-<span class="fc" id="L110">      String resp = HttpUtil.postParams(url + &quot;/accepted_state&quot;);</span>
-<span class="pc bpc" id="L111" title="1 of 4 branches missed.">      return resp != null &amp;&amp; resp.startsWith(&quot;STATE&quot;);</span>
-<span class="nc" id="L112">    } catch (ServerException e) {</span>
-<span class="nc" id="L113">      return false;</span>
+<span class="fc" id="L114">      String resp = HttpUtil.postParams(url + &quot;/accepted_state&quot;);</span>
+<span class="pc bpc" id="L115" title="1 of 4 branches missed.">      return resp != null &amp;&amp; resp.startsWith(&quot;STATE&quot;);</span>
+<span class="nc" id="L116">    } catch (Exception e) {</span>
+<span class="nc" id="L117">      return false;</span>
     }
   }
 
+
   private Integer discoverLeaderFromCluster() {
 
-<span class="fc" id="L119">    Integer bestLeader = null;</span>
+<span class="fc" id="L124">    Integer bestLeader = null;</span>
 
-<span class="fc bfc" id="L121" title="All 2 branches covered.">    for (String s : SERVERS) {</span>
+<span class="fc bfc" id="L126" title="All 2 branches covered.">    for (String s : SERVERS) {</span>
 
       try {
-<span class="fc" id="L124">        String resp = HttpUtil.postParams(s + &quot;/leader&quot;);</span>
+<span class="fc" id="L129">        String resp = HttpUtil.postParams(s + &quot;/leader&quot;);</span>
 
-<span class="fc bfc" id="L126" title="All 2 branches covered.">        if (resp == null) {</span>
-<span class="fc" id="L127">          continue;</span>
+<span class="fc bfc" id="L131" title="All 2 branches covered.">        if (resp == null) {</span>
+<span class="fc" id="L132">          continue;</span>
         }
 
-<span class="fc" id="L130">        int leader = Integer.parseInt(resp.trim());</span>
+<span class="fc" id="L135">        int leader = Integer.parseInt(resp.trim());</span>
 
-<span class="fc" id="L132">        boolean alive = isAlive(LOCALHOST + leader);</span>
-<span class="fc bfc" id="L133" title="All 2 branches covered.">        boolean betterThanCurrent =</span>
-<span class="pc bpc" id="L134" title="1 of 2 branches missed.">            bestLeader == null || leader &lt; bestLeader;</span>
+<span class="fc" id="L137">        boolean alive = isAlive(LOCALHOST + leader);</span>
+<span class="fc bfc" id="L138" title="All 2 branches covered.">        boolean betterThanCurrent =</span>
+<span class="pc bpc" id="L139" title="1 of 2 branches missed.">            bestLeader == null || leader &lt; bestLeader;</span>
 
-<span class="pc bpc" id="L136" title="1 of 4 branches missed.">        if (alive &amp;&amp; betterThanCurrent) {</span>
-<span class="fc" id="L137">          bestLeader = leader;</span>
+<span class="pc bpc" id="L141" title="1 of 4 branches missed.">        if (alive &amp;&amp; betterThanCurrent) {</span>
+<span class="fc" id="L142">          bestLeader = leader;</span>
         }
 
-<span class="nc" id="L140">      } catch (ServerException e) {</span>
-<span class="nc" id="L141">        System.out.printf(&quot;[SERVER %d] %s niedostepny%n&quot;, port, s);</span>
-<span class="fc" id="L142">      }</span>
-<span class="fc" id="L143">    }</span>
+<span class="nc" id="L145">      } catch (ServerException e) {</span>
+<span class="nc" id="L146">        log.info(&quot;[SERVER {}] {} niedostepny%n&quot;, port, s);</span>
+<span class="fc" id="L147">      }</span>
+<span class="fc" id="L148">    }</span>
 
-<span class="fc" id="L145">    return bestLeader;</span>
+<span class="fc" id="L150">    return bestLeader;</span>
   }
 
   /**
@@ -150,46 +155,46 @@ public class PaxosServer {
    */
   @PostConstruct
   public void discoverLeaderOnStartup() {
-<span class="fc" id="L153">    executor.submit(() -&gt; {</span>
+<span class="fc" id="L158">    executor.submit(() -&gt; {</span>
 
-<span class="fc" id="L155">      Integer discovered = discoverLeaderFromCluster();</span>
+<span class="fc" id="L160">      Integer discovered = discoverLeaderFromCluster();</span>
 
-<span class="pc bpc" id="L157" title="1 of 2 branches missed.">      if (discovered != null) {</span>
-<span class="nc" id="L158">        setLeaderPort(discovered);</span>
-<span class="nc" id="L159">        System.out.printf(</span>
-            &quot;[SERVER %d] Odkryto istniejacego lidera: %d%n&quot;,
-<span class="nc" id="L161">            port, discovered</span>
+<span class="pc bpc" id="L162" title="1 of 2 branches missed.">      if (discovered != null) {</span>
+<span class="nc" id="L163">        setLeaderPort(discovered);</span>
+<span class="nc" id="L164">        log.info(</span>
+            &quot;[SERVER {}] Odkryto istniejacego lidera: {}%n&quot;,
+<span class="nc" id="L166">            port, discovered</span>
         );
-<span class="nc" id="L163">        return;</span>
+<span class="nc" id="L168">        return;</span>
       }
 
-<span class="fc" id="L166">      electNewLeader();</span>
-<span class="fc" id="L167">    });</span>
-<span class="fc" id="L168">  }</span>
+<span class="fc" id="L171">      electNewLeader();</span>
+<span class="fc" id="L172">    });</span>
+<span class="fc" id="L173">  }</span>
 
   /**
    * Recznie ustawia promisedProposal.
    */
   public synchronized void injectPromised(int x) {
-<span class="fc" id="L174">    promisedProposal = x;</span>
-<span class="fc" id="L175">    System.out.printf(&quot;[SERVER %d] INJECT promised=%d%n&quot;, port, x);</span>
-<span class="fc" id="L176">  }</span>
+<span class="fc" id="L179">    promisedProposal = x;</span>
+<span class="fc" id="L180">    log.info(&quot;[SERVER {}] INJECT promised={}%n&quot;, port, x);</span>
+<span class="fc" id="L181">  }</span>
 
   /**
    * Recznie ustawia acceptedProposal.
    */
   public synchronized void injectAcceptedProposal(int x) {
-<span class="fc" id="L182">    acceptedProposal = x;</span>
-<span class="fc" id="L183">    System.out.printf(&quot;[SERVER %d] INJECT acceptedProposal=%d%n&quot;, port, x);</span>
-<span class="fc" id="L184">  }</span>
+<span class="fc" id="L187">    acceptedProposal = x;</span>
+<span class="fc" id="L188">    log.info(&quot;[SERVER {}] INJECT acceptedProposal={}%n&quot;, port, x);</span>
+<span class="fc" id="L189">  }</span>
 
   /**
    * Recznie ustawia acceptedValue.
    */
   public synchronized void injectAcceptedValue(int x) {
-<span class="fc" id="L190">    acceptedValue = x;</span>
-<span class="fc" id="L191">    System.out.printf(&quot;[SERVER %d] INJECT acceptedValue=%d%n&quot;, port, x);</span>
-<span class="fc" id="L192">  }</span>
+<span class="fc" id="L195">    acceptedValue = x;</span>
+<span class="fc" id="L196">    log.info(&quot;[SERVER {}] INJECT acceptedValue={}%n&quot;, port, x);</span>
+<span class="fc" id="L197">  }</span>
 
   /**
    * Okresowo sprawdza dostepnosc lidera i inicjuje elekcje w razie awarii.
@@ -197,132 +202,132 @@ public class PaxosServer {
   @Scheduled(fixedDelay = 3000)
   public void watcher() {
 
-<span class="pc bpc" id="L200" title="2 of 4 branches missed.">    if (!running || stuck) {</span>
-<span class="nc" id="L201">      return;</span>
+<span class="pc bpc" id="L205" title="2 of 4 branches missed.">    if (!running || stuck) {</span>
+<span class="nc" id="L206">      return;</span>
     }
 
-<span class="fc" id="L204">    int leader = getLeaderPort();</span>
+<span class="fc" id="L209">    int leader = getLeaderPort();</span>
 
-<span class="pc bpc" id="L206" title="1 of 2 branches missed.">    if (leader == -1) {</span>
-<span class="nc" id="L207">      System.out.printf(&quot;[SERVER %d] Brak lidera – odkrywanie%n&quot;, port);</span>
-<span class="nc" id="L208">      discoverLeaderOnRecovery();</span>
-<span class="nc" id="L209">      return;</span>
+<span class="pc bpc" id="L211" title="1 of 2 branches missed.">    if (leader == -1) {</span>
+<span class="nc" id="L212">      log.info(&quot;[SERVER {}] Brak lidera – odkrywanie%n&quot;, port);</span>
+<span class="nc" id="L213">      discoverLeaderOnRecovery();</span>
+<span class="nc" id="L214">      return;</span>
     }
 
-<span class="fc bfc" id="L212" title="All 2 branches covered.">    if (leader == port) {</span>
-<span class="fc" id="L213">      return;</span>
+<span class="fc bfc" id="L217" title="All 2 branches covered.">    if (leader == port) {</span>
+<span class="fc" id="L218">      return;</span>
     }
 
-<span class="pc bpc" id="L216" title="1 of 2 branches missed.">    if (!isAlive(LOCALHOST + leader)) {</span>
-<span class="fc" id="L217">      System.out.printf(</span>
-          &quot;[SERVER %d] Leader %d nie żyje – start elekcji%n&quot;,
-<span class="fc" id="L219">          port, leader</span>
+<span class="pc bpc" id="L221" title="1 of 2 branches missed.">    if (!isAlive(LOCALHOST + leader)) {</span>
+<span class="fc" id="L222">      log.info(</span>
+          &quot;[SERVER {}] Leader {} nie żyje – start elekcji%n&quot;,
+<span class="fc" id="L224">          port, leader</span>
       );
     }
-<span class="fc" id="L222">    electNewLeader();</span>
-<span class="fc" id="L223">  }</span>
+<span class="fc" id="L227">    electNewLeader();</span>
+<span class="fc" id="L228">  }</span>
 
   /**
    * Ustalenie portu lidera po powrocie z stanu stuck.
    */
   private void discoverLeaderOnRecovery() {
-<span class="fc" id="L229">    Integer discovered = discoverLeaderFromCluster();</span>
+<span class="fc" id="L234">    Integer discovered = discoverLeaderFromCluster();</span>
 
-<span class="fc bfc" id="L231" title="All 2 branches covered.">    if (discovered != null) {</span>
-<span class="fc" id="L232">      setLeaderPort(discovered);</span>
+<span class="fc bfc" id="L236" title="All 2 branches covered.">    if (discovered != null) {</span>
+<span class="fc" id="L237">      setLeaderPort(discovered);</span>
     } else {
-<span class="fc" id="L234">      electNewLeader();</span>
+<span class="fc" id="L239">      electNewLeader();</span>
     }
-<span class="fc" id="L236">  }</span>
+<span class="fc" id="L241">  }</span>
 
   /**
    * Przeprowadza wybor nowego lidera na podstawie najnizszego portu.
    */
   private void electNewLeader() {
 
-<span class="fc" id="L243">    int currentLeader = getLeaderPort();</span>
-<span class="pc bpc" id="L244" title="1 of 2 branches missed.">    if (currentLeader != port</span>
-<span class="fc bfc" id="L245" title="All 2 branches covered.">        &amp;&amp; isAlive(LOCALHOST + currentLeader)) {</span>
-<span class="fc" id="L246">      return;</span>
+<span class="fc" id="L248">    int currentLeader = getLeaderPort();</span>
+<span class="pc bpc" id="L249" title="1 of 2 branches missed.">    if (currentLeader != port</span>
+<span class="fc bfc" id="L250" title="All 2 branches covered.">        &amp;&amp; isAlive(LOCALHOST + currentLeader)) {</span>
+<span class="fc" id="L251">      return;</span>
     }
 
-<span class="fc" id="L249">    List&lt;Integer&gt; ports = new ArrayList&lt;&gt;();</span>
+<span class="fc" id="L254">    List&lt;Integer&gt; ports = new ArrayList&lt;&gt;();</span>
 
-<span class="fc bfc" id="L251" title="All 2 branches covered.">    if (!stuck) {</span>
-<span class="fc" id="L252">      ports.add(port);</span>
+<span class="fc bfc" id="L256" title="All 2 branches covered.">    if (!stuck) {</span>
+<span class="fc" id="L257">      ports.add(port);</span>
     }
 
-<span class="fc bfc" id="L255" title="All 2 branches covered.">    for (String s : SERVERS) {</span>
+<span class="fc bfc" id="L260" title="All 2 branches covered.">    for (String s : SERVERS) {</span>
       try {
-<span class="fc" id="L257">        String resp = HttpUtil.postParams(s + &quot;/election&quot;);</span>
+<span class="fc" id="L262">        String resp = HttpUtil.postParams(s + &quot;/election&quot;);</span>
 
-<span class="fc bfc" id="L259" title="All 2 branches covered.">        if (resp == null) {</span>
-<span class="fc" id="L260">          continue;</span>
+<span class="fc bfc" id="L264" title="All 2 branches covered.">        if (resp == null) {</span>
+<span class="fc" id="L265">          continue;</span>
         }
 
-<span class="fc" id="L263">        int p = Integer.parseInt(resp.trim());</span>
-<span class="fc" id="L264">        ports.add(p);</span>
+<span class="fc" id="L268">        int p = Integer.parseInt(resp.trim());</span>
+<span class="fc" id="L269">        ports.add(p);</span>
 
-<span class="fc" id="L266">      } catch (NumberFormatException e) {</span>
-<span class="fc" id="L267">        System.out.printf(&quot;[SERVER %d] %s jest STUCK (%s)%n&quot;, port, s, e.getMessage());</span>
-<span class="fc" id="L268">      }</span>
-<span class="fc" id="L269">    }</span>
+<span class="fc" id="L271">      } catch (NumberFormatException e) {</span>
+<span class="fc" id="L272">        log.info(&quot;[SERVER {}] {} jest STUCK ({})%n&quot;, port, s, e.getMessage());</span>
+<span class="fc" id="L273">      }</span>
+<span class="fc" id="L274">    }</span>
 
-<span class="fc bfc" id="L271" title="All 2 branches covered.">    if (ports.isEmpty()) {</span>
-<span class="fc" id="L272">      System.out.printf(&quot;[SERVER %d] Brak kandydatow na lidera%n&quot;, port);</span>
-<span class="fc" id="L273">      return;</span>
+<span class="fc bfc" id="L276" title="All 2 branches covered.">    if (ports.isEmpty()) {</span>
+<span class="fc" id="L277">      log.info(&quot;[SERVER {}] Brak kandydatow na lidera%n&quot;, port);</span>
+<span class="fc" id="L278">      return;</span>
     }
 
-<span class="fc" id="L276">    int winner = ports.stream().min(Integer::compare).orElse(port);</span>
-<span class="fc" id="L277">    setLeaderPort(winner);</span>
+<span class="fc" id="L281">    int winner = ports.stream().min(Integer::compare).orElse(port);</span>
+<span class="fc" id="L282">    setLeaderPort(winner);</span>
 
-<span class="fc" id="L279">    System.out.printf(&quot;[SERVER %d] Nowy leader wybrany = %d%n&quot;, port, winner);</span>
-<span class="fc" id="L280">  }</span>
+<span class="fc" id="L284">    log.info(&quot;[SERVER {}] Nowy leader wybrany = {}%n&quot;, port, winner);</span>
+<span class="fc" id="L285">  }</span>
 
 
   /**
    * Symuluje awarie serwera i zamyka kontekst aplikacji.
    */
   public void crash() {
-<span class="fc" id="L287">    running = false;</span>
-<span class="fc" id="L288">    System.out.printf(&quot;[SERVER %d] Crash za 300ms%n&quot;, port);</span>
+<span class="fc" id="L292">    running = false;</span>
+<span class="fc" id="L293">    log.info(&quot;[SERVER {}] Crash za 300ms%n&quot;, port);</span>
 
-<span class="fc" id="L290">    new Thread(() -&gt; {</span>
+<span class="fc" id="L295">    new Thread(() -&gt; {</span>
       try {
-<span class="fc" id="L292">        Thread.sleep(300);</span>
-<span class="nc" id="L293">      } catch (InterruptedException e) {</span>
-<span class="nc" id="L294">        Thread.currentThread().interrupt();</span>
-<span class="fc" id="L295">      }</span>
-<span class="fc" id="L296">      ctx.close();</span>
-<span class="fc" id="L297">    }).start();</span>
-<span class="fc" id="L298">  }</span>
+<span class="fc" id="L297">        Thread.sleep(300);</span>
+<span class="nc" id="L298">      } catch (InterruptedException e) {</span>
+<span class="nc" id="L299">        Thread.currentThread().interrupt();</span>
+<span class="fc" id="L300">      }</span>
+<span class="fc" id="L301">      ctx.close();</span>
+<span class="fc" id="L302">    }).start();</span>
+<span class="fc" id="L303">  }</span>
 
   /**
    * Inicjuje nowa runde Paxosa.
    */
   public void startPaxos(int value) {
-<span class="fc" id="L304">    executor.submit(() -&gt; runPaxosRound(value));</span>
-<span class="fc" id="L305">  }</span>
+<span class="fc" id="L309">    executor.submit(() -&gt; runPaxosRound(value));</span>
+<span class="fc" id="L310">  }</span>
 
   /**
    * Zapisuje poprzedni stan do rollbacku.
    */
   private synchronized void savePrevState() {
-<span class="fc" id="L311">    prevPromisedProposal = promisedProposal;</span>
-<span class="fc" id="L312">    prevAcceptedProposal = acceptedProposal;</span>
-<span class="fc" id="L313">    prevAcceptedValue = acceptedValue;</span>
-<span class="fc" id="L314">  }</span>
+<span class="fc" id="L316">    prevPromisedProposal = promisedProposal;</span>
+<span class="fc" id="L317">    prevAcceptedProposal = acceptedProposal;</span>
+<span class="fc" id="L318">    prevAcceptedValue = acceptedValue;</span>
+<span class="fc" id="L319">  }</span>
 
   /**
    * Przywraca poprzedni stan serwera.
    */
   public synchronized void rollback() {
-<span class="fc" id="L320">    promisedProposal = prevPromisedProposal;</span>
-<span class="fc" id="L321">    acceptedProposal = prevAcceptedProposal;</span>
-<span class="fc" id="L322">    acceptedValue = prevAcceptedValue;</span>
-<span class="fc" id="L323">    System.out.printf(&quot;[SERVER %d] ROLLBACK -&gt; (%d,%d,%d)%n&quot;, port, promisedProposal,</span>
-<span class="fc" id="L324">        acceptedProposal, acceptedValue);</span>
-<span class="fc" id="L325">  }</span>
+<span class="fc" id="L325">    promisedProposal = prevPromisedProposal;</span>
+<span class="fc" id="L326">    acceptedProposal = prevAcceptedProposal;</span>
+<span class="fc" id="L327">    acceptedValue = prevAcceptedValue;</span>
+<span class="fc" id="L328">    log.info(&quot;[SERVER {}] ROLLBACK -&gt; ({},{},{})%n&quot;, port, promisedProposal,</span>
+<span class="fc" id="L329">        acceptedProposal, acceptedValue);</span>
+<span class="fc" id="L330">  }</span>
 
   /**
    * Wysyla polecenie rollback do wszystkich wskazanych serwerow.
@@ -330,13 +335,13 @@ public class PaxosServer {
    * @param servers lista adresow serwerow
    */
   private void rollbackAll(List&lt;String&gt; servers) {
-<span class="fc bfc" id="L333" title="All 2 branches covered.">    for (String s : servers) {</span>
-<span class="fc" id="L334">      executor.submit(() -&gt; {</span>
-<span class="fc" id="L335">        String resp = HttpUtil.postParams(s + &quot;/rollback&quot;);</span>
-<span class="fc" id="L336">        System.out.printf(&quot;[LIDER %d] -&gt; ROLLBACK wyslany do %s =&gt; %s%n&quot;, port, s, resp);</span>
-<span class="fc" id="L337">      });</span>
-<span class="fc" id="L338">    }</span>
-<span class="fc" id="L339">  }</span>
+<span class="fc bfc" id="L338" title="All 2 branches covered.">    for (String s : servers) {</span>
+<span class="fc" id="L339">      executor.submit(() -&gt; {</span>
+<span class="fc" id="L340">        String resp = HttpUtil.postParams(s + &quot;/rollback&quot;);</span>
+<span class="fc" id="L341">        log.info(&quot;[LIDER {}] -&gt; ROLLBACK wyslany do {} =&gt; {}%n&quot;, port, s, resp);</span>
+<span class="fc" id="L342">      });</span>
+<span class="fc" id="L343">    }</span>
+<span class="fc" id="L344">  }</span>
 
   /**
    * Blokuje serwer i wymusza zwracanie stalego komunikatu.
@@ -344,22 +349,22 @@ public class PaxosServer {
    * @param message komunikat zwracany zamiast normalnych odpowiedzi
    */
   public synchronized void stuck(String message) {
-<span class="fc" id="L347">    this.stuck = true;</span>
-<span class="fc" id="L348">    this.stuckMessage = message;</span>
-<span class="fc" id="L349">    System.out.printf(&quot;[SERVER %d] Serwer zaciety z wiadomoscia: %s%n&quot;, port, message);</span>
-<span class="fc" id="L350">  }</span>
+<span class="fc" id="L352">    this.stuck = true;</span>
+<span class="fc" id="L353">    this.stuckMessage = message;</span>
+<span class="fc" id="L354">    log.info(&quot;[SERVER {}] Serwer zaciety z wiadomoscia: {}%n&quot;, port, message);</span>
+<span class="fc" id="L355">  }</span>
 
 
   /**
    * Odblokowuje serwer.
    */
   public synchronized void unstuck() {
-<span class="fc" id="L357">    this.stuck = false;</span>
-<span class="fc" id="L358">    this.stuckMessage = null;</span>
-<span class="fc" id="L359">    setLeaderPort(-1);</span>
-<span class="fc" id="L360">    executor.submit(this::discoverLeaderOnRecovery);</span>
-<span class="fc" id="L361">    System.out.printf(&quot;[SERVER %d] Serwer wraca do normalnego dzialania: %n&quot;, port);</span>
-<span class="fc" id="L362">  }</span>
+<span class="fc" id="L362">    this.stuck = false;</span>
+<span class="fc" id="L363">    this.stuckMessage = null;</span>
+<span class="fc" id="L364">    setLeaderPort(-1);</span>
+<span class="fc" id="L365">    executor.submit(this::discoverLeaderOnRecovery);</span>
+<span class="fc" id="L366">    log.info(&quot;[SERVER {}] Serwer wraca do normalnego dzialania: %n&quot;, port);</span>
+<span class="fc" id="L367">  }</span>
 
 
   /**
@@ -371,45 +376,45 @@ public class PaxosServer {
    */
   private List&lt;Promise&gt; preparePhase(List&lt;String&gt; alive, long proposalId) {
 
-<span class="fc" id="L374">    List&lt;Promise&gt; promises = Collections.synchronizedList(new ArrayList&lt;&gt;());</span>
-<span class="fc" id="L375">    CountDownLatch latch = new CountDownLatch(alive.size());</span>
+<span class="fc" id="L379">    List&lt;Promise&gt; promises = Collections.synchronizedList(new ArrayList&lt;&gt;());</span>
+<span class="fc" id="L380">    CountDownLatch latch = new CountDownLatch(alive.size());</span>
 
-<span class="fc bfc" id="L377" title="All 2 branches covered.">    for (String s : alive) {</span>
-<span class="fc" id="L378">      executor.submit(() -&gt; {</span>
+<span class="fc bfc" id="L382" title="All 2 branches covered.">    for (String s : alive) {</span>
+<span class="fc" id="L383">      executor.submit(() -&gt; {</span>
         try {
-<span class="fc" id="L380">          System.out.printf(&quot;[LIDER %d] -&gt; PREPARE do %s%n&quot;, port, s);</span>
-<span class="fc" id="L381">          String resp = HttpUtil.postParams(</span>
+<span class="fc" id="L385">          log.info(&quot;[LIDER {}] -&gt; PREPARE do {}%n&quot;, port, s);</span>
+<span class="fc" id="L386">          String resp = HttpUtil.postParams(</span>
               s + &quot;/prepare?proposalId=&quot; + proposalId);
 
-<span class="pc bpc" id="L384" title="1 of 4 branches missed.">          if (resp != null &amp;&amp; resp.startsWith(&quot;PROMISE&quot;)) {</span>
-<span class="fc" id="L385">            String[] p = resp.split(&quot;,&quot;);</span>
-<span class="pc bpc" id="L386" title="3 of 4 branches missed.">            if (p.length == 3 &amp;&amp; !&quot;NONE&quot;.equals(p[1])) {</span>
-<span class="nc" id="L387">              promises.add(new Promise(true,</span>
-<span class="nc" id="L388">                  Integer.parseInt(p[1]),</span>
-<span class="nc" id="L389">                  Integer.parseInt(p[2])));</span>
+<span class="pc bpc" id="L389" title="1 of 4 branches missed.">          if (resp != null &amp;&amp; resp.startsWith(&quot;PROMISE&quot;)) {</span>
+<span class="fc" id="L390">            String[] p = resp.split(&quot;,&quot;);</span>
+<span class="pc bpc" id="L391" title="3 of 4 branches missed.">            if (p.length == 3 &amp;&amp; !&quot;NONE&quot;.equals(p[1])) {</span>
+<span class="nc" id="L392">              promises.add(new Promise(true,</span>
+<span class="nc" id="L393">                  Integer.parseInt(p[1]),</span>
+<span class="nc" id="L394">                  Integer.parseInt(p[2])));</span>
             } else {
-<span class="fc" id="L391">              promises.add(new Promise(true, -1, -1));</span>
+<span class="fc" id="L396">              promises.add(new Promise(true, -1, -1));</span>
             }
           }
         } finally {
-<span class="fc" id="L395">          latch.countDown();</span>
+<span class="fc" id="L400">          latch.countDown();</span>
         }
-<span class="fc" id="L397">      });</span>
-<span class="fc" id="L398">    }</span>
+<span class="fc" id="L402">      });</span>
+<span class="fc" id="L403">    }</span>
 
     try {
-<span class="fc" id="L401">      latch.await();</span>
-<span class="nc" id="L402">    } catch (InterruptedException e) {</span>
-<span class="nc" id="L403">      Thread.currentThread().interrupt();</span>
-<span class="fc" id="L404">    }</span>
+<span class="fc" id="L406">      latch.await();</span>
+<span class="nc" id="L407">    } catch (InterruptedException e) {</span>
+<span class="nc" id="L408">      Thread.currentThread().interrupt();</span>
+<span class="fc" id="L409">    }</span>
 
-<span class="fc" id="L406">    System.out.printf(&quot;[LIDER %d] Otrzymane PROMISE: %s%n&quot;,</span>
-<span class="fc" id="L407">        port,</span>
-<span class="fc" id="L408">        promises.stream()</span>
-<span class="fc" id="L409">            .map(p -&gt; &quot;(&quot; + p.acceptedProposal() + &quot;,&quot; + p.acceptedValue() + &quot;)&quot;)</span>
-<span class="fc" id="L410">            .toList());</span>
+<span class="fc" id="L411">    log.info(&quot;[LIDER {}] Otrzymane PROMISE: {}%n&quot;,</span>
+<span class="fc" id="L412">        port,</span>
+<span class="fc" id="L413">        promises.stream()</span>
+<span class="fc" id="L414">            .map(p -&gt; &quot;(&quot; + p.acceptedProposal() + &quot;,&quot; + p.acceptedValue() + &quot;)&quot;)</span>
+<span class="fc" id="L415">            .toList());</span>
 
-<span class="fc" id="L412">    return promises;</span>
+<span class="fc" id="L417">    return promises;</span>
   }
 
 
@@ -422,20 +427,20 @@ public class PaxosServer {
    */
   private Integer chooseValueFromPromises(List&lt;Promise&gt; promises, int clientValue) {
 
-<span class="fc" id="L425">    Map&lt;Integer, Integer&gt; counts = new HashMap&lt;&gt;();</span>
+<span class="fc" id="L430">    Map&lt;Integer, Integer&gt; counts = new HashMap&lt;&gt;();</span>
 
-<span class="fc bfc" id="L427" title="All 2 branches covered.">    for (Promise p : promises) {</span>
-<span class="fc bfc" id="L428" title="All 2 branches covered.">      int val = p.acceptedProposal() &gt;= 0 ? p.acceptedValue() : -1;</span>
-<span class="fc" id="L429">      counts.put(val, counts.getOrDefault(val, 0) + 1);</span>
-<span class="fc" id="L430">    }</span>
+<span class="fc bfc" id="L432" title="All 2 branches covered.">    for (Promise p : promises) {</span>
+<span class="fc bfc" id="L433" title="All 2 branches covered.">      int val = p.acceptedProposal() &gt;= 0 ? p.acceptedValue() : -1;</span>
+<span class="fc" id="L434">      counts.put(val, counts.getOrDefault(val, 0) + 1);</span>
+<span class="fc" id="L435">    }</span>
 
-<span class="pc bpc" id="L432" title="1 of 2 branches missed.">    for (Map.Entry&lt;Integer, Integer&gt; e : counts.entrySet()) {</span>
-<span class="fc bfc" id="L433" title="All 2 branches covered.">      if (e.getValue() &gt;= MAJORITY) {</span>
-<span class="fc bfc" id="L434" title="All 2 branches covered.">        return e.getKey() == -1 ? clientValue : e.getKey();</span>
+<span class="pc bpc" id="L437" title="1 of 2 branches missed.">    for (Map.Entry&lt;Integer, Integer&gt; e : counts.entrySet()) {</span>
+<span class="fc bfc" id="L438" title="All 2 branches covered.">      if (e.getValue() &gt;= MAJORITY) {</span>
+<span class="fc bfc" id="L439" title="All 2 branches covered.">        return e.getKey() == -1 ? clientValue : e.getKey();</span>
       }
-<span class="fc" id="L436">    }</span>
+<span class="fc" id="L441">    }</span>
 
-<span class="nc" id="L438">    return null;</span>
+<span class="nc" id="L443">    return null;</span>
   }
 
   /**
@@ -448,35 +453,35 @@ public class PaxosServer {
    */
   private int acceptPhase(List&lt;String&gt; alive, long proposalId, int value) {
 
-<span class="fc" id="L451">    CountDownLatch latch = new CountDownLatch(alive.size());</span>
-<span class="fc" id="L452">    List&lt;Boolean&gt; accepts = Collections.synchronizedList(new ArrayList&lt;&gt;());</span>
+<span class="fc" id="L456">    CountDownLatch latch = new CountDownLatch(alive.size());</span>
+<span class="fc" id="L457">    List&lt;Boolean&gt; accepts = Collections.synchronizedList(new ArrayList&lt;&gt;());</span>
 
-<span class="fc bfc" id="L454" title="All 2 branches covered.">    for (String s : alive) {</span>
-<span class="fc" id="L455">      executor.submit(() -&gt; {</span>
+<span class="fc bfc" id="L459" title="All 2 branches covered.">    for (String s : alive) {</span>
+<span class="fc" id="L460">      executor.submit(() -&gt; {</span>
         try {
-<span class="fc" id="L457">          System.out.printf(&quot;[LIDER %d] -&gt; ACCEPT do %s, %d%n&quot;, port, s, value);</span>
-<span class="fc" id="L458">          String resp = HttpUtil.postParams(</span>
+<span class="fc" id="L462">          log.info(&quot;[LIDER {}] -&gt; ACCEPT do {}, {}%n&quot;, port, s, value);</span>
+<span class="fc" id="L463">          String resp = HttpUtil.postParams(</span>
               s + &quot;/accept?proposalId=&quot; + proposalId + &quot;&amp;value=&quot; + value);
 
-<span class="pc bpc" id="L461" title="2 of 4 branches missed.">          if (resp != null &amp;&amp; resp.startsWith(&quot;ACCEPTED&quot;)) {</span>
-<span class="fc" id="L462">            accepts.add(true);</span>
+<span class="pc bpc" id="L466" title="2 of 4 branches missed.">          if (resp != null &amp;&amp; resp.startsWith(&quot;ACCEPTED&quot;)) {</span>
+<span class="fc" id="L467">            accepts.add(true);</span>
           }
         } finally {
-<span class="fc" id="L465">          latch.countDown();</span>
+<span class="fc" id="L470">          latch.countDown();</span>
         }
-<span class="fc" id="L467">      });</span>
-<span class="fc" id="L468">    }</span>
+<span class="fc" id="L472">      });</span>
+<span class="fc" id="L473">    }</span>
 
     try {
-<span class="fc" id="L471">      latch.await();</span>
-<span class="nc" id="L472">    } catch (InterruptedException e) {</span>
-<span class="nc" id="L473">      Thread.currentThread().interrupt();</span>
-<span class="fc" id="L474">    }</span>
+<span class="fc" id="L476">      latch.await();</span>
+<span class="nc" id="L477">    } catch (InterruptedException e) {</span>
+<span class="nc" id="L478">      Thread.currentThread().interrupt();</span>
+<span class="fc" id="L479">    }</span>
 
-<span class="fc" id="L476">    System.out.printf(&quot;[LIDER %d] Ilosc ACCEPT = %d%n&quot;,</span>
-<span class="fc" id="L477">        port, accepts.size());</span>
+<span class="fc" id="L481">    log.info(&quot;[LIDER {}] Ilosc ACCEPT = {}%n&quot;,</span>
+<span class="fc" id="L482">        port, accepts.size());</span>
 
-<span class="fc" id="L479">    return accepts.size();</span>
+<span class="fc" id="L484">    return accepts.size();</span>
   }
 
 
@@ -487,48 +492,48 @@ public class PaxosServer {
    */
   private void runPaxosRound(int clientValue) {
 
-<span class="fc" id="L490">    long proposalId = (System.currentTimeMillis() &amp; 0xFFFFFFF) + id;</span>
+<span class="fc" id="L495">    long proposalId = (System.currentTimeMillis() &amp; 0xFFFFFFF) + id;</span>
 
-<span class="fc" id="L492">    System.out.printf(&quot;%n[LIDER %d] Poczatek rundy paxosa%n&quot;, port);</span>
-<span class="fc" id="L493">    System.out.printf(&quot;[LIDER %d] proposalId=%d, clientValue=%d%n&quot;,</span>
-<span class="fc" id="L494">        port, proposalId, clientValue);</span>
+<span class="fc" id="L497">    log.info(&quot;%n[LIDER {}] Poczatek rundy paxosa%n&quot;, port);</span>
+<span class="fc" id="L498">    log.info(&quot;[LIDER {}] proposalId={}, clientValue={}%n&quot;,</span>
+<span class="fc" id="L499">        port, proposalId, clientValue);</span>
 
-<span class="fc" id="L496">    List&lt;String&gt; alive = collectAlive();</span>
-<span class="fc" id="L497">    System.out.printf(&quot;[LIDER %d] Dzialajace serwery (%d): %s%n&quot;,</span>
-<span class="fc" id="L498">        port, alive.size(), alive);</span>
+<span class="fc" id="L501">    List&lt;String&gt; alive = collectAlive();</span>
+<span class="fc" id="L502">    log.info(&quot;[LIDER {}] Dzialajace serwery ({}): {}%n&quot;,</span>
+<span class="fc" id="L503">        port, alive.size(), alive);</span>
 
-<span class="pc bpc" id="L500" title="1 of 2 branches missed.">    if (alive.isEmpty()) {</span>
-<span class="nc" id="L501">      System.out.printf(&quot;[LIDER %d] Brak zywych serwerow - koniec%n&quot;, port);</span>
-<span class="nc" id="L502">      return;</span>
+<span class="pc bpc" id="L505" title="1 of 2 branches missed.">    if (alive.isEmpty()) {</span>
+<span class="nc" id="L506">      log.info(&quot;[LIDER {}] Brak zywych serwerow - koniec%n&quot;, port);</span>
+<span class="nc" id="L507">      return;</span>
     }
 
-<span class="fc" id="L505">    List&lt;Promise&gt; promises = preparePhase(alive, proposalId);</span>
+<span class="fc" id="L510">    List&lt;Promise&gt; promises = preparePhase(alive, proposalId);</span>
 
-<span class="fc bfc" id="L507" title="All 2 branches covered.">    if (promises.size() &lt; MAJORITY) {</span>
-<span class="fc" id="L508">      System.out.printf(&quot;[LIDER %d] Brak wiekszosci w PREPARE (%d/%d) — ROLLBACK%n&quot;,</span>
-<span class="fc" id="L509">          port, promises.size(), MAJORITY);</span>
-<span class="fc" id="L510">      rollbackAll(alive);</span>
-<span class="fc" id="L511">      return;</span>
+<span class="fc bfc" id="L512" title="All 2 branches covered.">    if (promises.size() &lt; MAJORITY) {</span>
+<span class="fc" id="L513">      log.info(&quot;[LIDER {}] Brak wiekszosci w PREPARE ({}/{}) — ROLLBACK%n&quot;,</span>
+<span class="fc" id="L514">          port, promises.size(), MAJORITY);</span>
+<span class="fc" id="L515">      rollbackAll(alive);</span>
+<span class="fc" id="L516">      return;</span>
     }
 
-<span class="fc" id="L514">    Integer chosenValue = chooseValueFromPromises(promises, clientValue);</span>
-<span class="pc bpc" id="L515" title="1 of 2 branches missed.">    if (chosenValue == null) {</span>
-<span class="nc" id="L516">      System.out.printf(&quot;[LIDER %d] Brak wiekszosci na zadna wartosc — ROLLBACK%n&quot;, port);</span>
-<span class="nc" id="L517">      rollbackAll(alive);</span>
-<span class="nc" id="L518">      return;</span>
+<span class="fc" id="L519">    Integer chosenValue = chooseValueFromPromises(promises, clientValue);</span>
+<span class="pc bpc" id="L520" title="1 of 2 branches missed.">    if (chosenValue == null) {</span>
+<span class="nc" id="L521">      log.info(&quot;[LIDER {}] Brak wiekszosci na zadna wartosc — ROLLBACK%n&quot;, port);</span>
+<span class="nc" id="L522">      rollbackAll(alive);</span>
+<span class="nc" id="L523">      return;</span>
     }
 
-<span class="fc" id="L521">    System.out.printf(&quot;[LIDER %d] Ustalona wartosc = %d%n&quot;, port, chosenValue);</span>
+<span class="fc" id="L526">    log.info(&quot;[LIDER {}] Ustalona wartosc = {}%n&quot;, port, chosenValue);</span>
 
-<span class="fc" id="L523">    int acceptedCount = acceptPhase(alive, proposalId, chosenValue);</span>
+<span class="fc" id="L528">    int acceptedCount = acceptPhase(alive, proposalId, chosenValue);</span>
 
-<span class="pc bpc" id="L525" title="1 of 2 branches missed.">    if (acceptedCount &gt;= MAJORITY) {</span>
-<span class="fc" id="L526">      System.out.printf(&quot;[LIDER %d] Finalna, ustalona wartosc = %d%n&quot;, port, chosenValue);</span>
+<span class="pc bpc" id="L530" title="1 of 2 branches missed.">    if (acceptedCount &gt;= MAJORITY) {</span>
+<span class="fc" id="L531">      log.info(&quot;[LIDER {}] Finalna, ustalona wartosc = {}%n&quot;, port, chosenValue);</span>
     } else {
-<span class="nc" id="L528">      System.out.printf(&quot;[LIDER %d] Brak wiekszosci w ACCEPT — ROLLBACK%n&quot;, port);</span>
-<span class="nc" id="L529">      rollbackAll(alive);</span>
+<span class="nc" id="L533">      log.info(&quot;[LIDER {}] Brak wiekszosci w ACCEPT — ROLLBACK%n&quot;, port);</span>
+<span class="nc" id="L534">      rollbackAll(alive);</span>
     }
-<span class="fc" id="L531">  }</span>
+<span class="fc" id="L536">  }</span>
 
 
   /**
@@ -538,39 +543,39 @@ public class PaxosServer {
    * @return odpowiedz PROMISE, REJECT lub komunikat blokady
    */
   public synchronized String prepare(long proposalId) {
-<span class="pc bpc" id="L541" title="1 of 2 branches missed.">    if (stuck) {</span>
-<span class="nc" id="L542">      return stuckMessage;</span>
+<span class="pc bpc" id="L546" title="1 of 2 branches missed.">    if (stuck) {</span>
+<span class="nc" id="L547">      return stuckMessage;</span>
     }
-<span class="fc bfc" id="L544" title="All 2 branches covered.">    if (!running) {</span>
-<span class="fc" id="L545">      return null;</span>
-    }
-
-<span class="fc" id="L548">    System.out.printf(&quot;[SERVER %d] &lt;- PREPARE proposalId=%d%n&quot;, port, proposalId);</span>
-
-<span class="pc bpc" id="L550" title="1 of 2 branches missed.">    if (Math.random() &lt; FAIL_CHANCE) {</span>
-<span class="nc" id="L551">      System.out.printf(&quot;[SERVER %d] Brak odpowiedzi - symulacja awarii komunikacji w PREPARE %n&quot;,</span>
-<span class="nc" id="L552">          port);</span>
-<span class="nc" id="L553">      return null;</span>
+<span class="fc bfc" id="L549" title="All 2 branches covered.">    if (!running) {</span>
+<span class="fc" id="L550">      return null;</span>
     }
 
-<span class="fc bfc" id="L556" title="All 2 branches covered.">    if (proposalId &gt; promisedProposal) {</span>
-<span class="fc" id="L557">      savePrevState();</span>
+<span class="fc" id="L553">    log.info(&quot;[SERVER {}] &lt;- PREPARE proposalId={}%n&quot;, port, proposalId);</span>
 
-<span class="fc" id="L559">      System.out.printf(&quot;[SERVER %d] -&gt; PROMISE (accepted=(%d,%d))%n&quot;, port, acceptedProposal,</span>
-<span class="fc" id="L560">          acceptedValue);</span>
+<span class="pc bpc" id="L555" title="1 of 2 branches missed.">    if (Math.random() &lt; FAIL_CHANCE) {</span>
+<span class="nc" id="L556">      log.info(&quot;[SERVER {}] Brak odpowiedzi - symulacja awarii komunikacji w PREPARE %n&quot;,</span>
+<span class="nc" id="L557">          port);</span>
+<span class="nc" id="L558">      return null;</span>
+    }
 
-<span class="fc" id="L562">      promisedProposal = (int) proposalId;</span>
+<span class="fc bfc" id="L561" title="All 2 branches covered.">    if (proposalId &gt; promisedProposal) {</span>
+<span class="fc" id="L562">      savePrevState();</span>
 
-<span class="fc bfc" id="L564" title="All 2 branches covered.">      if (acceptedProposal != -1) {</span>
-<span class="fc" id="L565">        return &quot;PROMISE,&quot; + acceptedProposal + &quot;,&quot; + acceptedValue;</span>
+<span class="fc" id="L564">      log.info(&quot;[SERVER {}] -&gt; PROMISE (accepted=({},{}))%n&quot;, port, acceptedProposal,</span>
+<span class="fc" id="L565">          acceptedValue);</span>
+
+<span class="fc" id="L567">      promisedProposal = (int) proposalId;</span>
+
+<span class="fc bfc" id="L569" title="All 2 branches covered.">      if (acceptedProposal != -1) {</span>
+<span class="fc" id="L570">        return &quot;PROMISE,&quot; + acceptedProposal + &quot;,&quot; + acceptedValue;</span>
       } else {
-<span class="fc" id="L567">        return &quot;PROMISE,NONE&quot;;</span>
+<span class="fc" id="L572">        return &quot;PROMISE,NONE&quot;;</span>
       }
     }
 
-<span class="fc" id="L571">    System.out.printf(&quot;[SERVER %d] -&gt; REJECT (promised=%d)%n&quot;, port, promisedProposal);</span>
+<span class="fc" id="L576">    log.info(&quot;[SERVER {}] -&gt; REJECT (promised={})%n&quot;, port, promisedProposal);</span>
 
-<span class="fc" id="L573">    return &quot;REJECT&quot;;</span>
+<span class="fc" id="L578">    return &quot;REJECT&quot;;</span>
   }
 
   /**
@@ -581,37 +586,37 @@ public class PaxosServer {
    * @return odpowiedz ACCEPTED, REJECT lub komunikat blokady
    */
   public synchronized String accept(long proposalId, int value) {
-<span class="pc bpc" id="L584" title="1 of 2 branches missed.">    if (stuck) {</span>
-<span class="nc" id="L585">      return stuckMessage;</span>
+<span class="pc bpc" id="L589" title="1 of 2 branches missed.">    if (stuck) {</span>
+<span class="nc" id="L590">      return stuckMessage;</span>
     }
 
-<span class="fc bfc" id="L588" title="All 2 branches covered.">    if (!running) {</span>
-<span class="fc" id="L589">      return null;</span>
+<span class="fc bfc" id="L593" title="All 2 branches covered.">    if (!running) {</span>
+<span class="fc" id="L594">      return null;</span>
     }
 
-<span class="pc bpc" id="L592" title="1 of 2 branches missed.">    if (Math.random() &lt; FAIL_CHANCE) {</span>
-<span class="nc" id="L593">      System.out.printf(&quot;[SERVER %d] Brak odpowiedzi - symulacja awarii komunikacji w ACCEPT %n&quot;,</span>
-<span class="nc" id="L594">          port);</span>
-<span class="nc" id="L595">      return null;</span>
+<span class="pc bpc" id="L597" title="1 of 2 branches missed.">    if (Math.random() &lt; FAIL_CHANCE) {</span>
+<span class="nc" id="L598">      log.info(&quot;[SERVER {}] Brak odpowiedzi - symulacja awarii komunikacji w ACCEPT %n&quot;,</span>
+<span class="nc" id="L599">          port);</span>
+<span class="nc" id="L600">      return null;</span>
     }
 
-<span class="fc" id="L598">    System.out.printf(&quot;[SERVER %d] &lt;- ACCEPT proposalId=%d value=%d%n&quot;, port, proposalId, value);</span>
+<span class="fc" id="L603">    log.info(&quot;[SERVER {}] &lt;- ACCEPT proposalId={} value={}%n&quot;, port, proposalId, value);</span>
 
-<span class="fc bfc" id="L600" title="All 2 branches covered.">    if (proposalId &gt;= promisedProposal) {</span>
-<span class="fc" id="L601">      savePrevState();</span>
+<span class="fc bfc" id="L605" title="All 2 branches covered.">    if (proposalId &gt;= promisedProposal) {</span>
+<span class="fc" id="L606">      savePrevState();</span>
 
-<span class="fc" id="L603">      promisedProposal = (int) proposalId;</span>
-<span class="fc" id="L604">      acceptedProposal = (int) proposalId;</span>
-<span class="fc" id="L605">      acceptedValue = value;</span>
+<span class="fc" id="L608">      promisedProposal = (int) proposalId;</span>
+<span class="fc" id="L609">      acceptedProposal = (int) proposalId;</span>
+<span class="fc" id="L610">      acceptedValue = value;</span>
 
-<span class="fc" id="L607">      System.out.printf(&quot;[SERVER %d] -&gt; ACCEPTED (%d,%d)%n&quot;, port, acceptedProposal, acceptedValue);</span>
+<span class="fc" id="L612">      log.info(&quot;[SERVER {}] -&gt; ACCEPTED ({},{})%n&quot;, port, acceptedProposal, acceptedValue);</span>
 
-<span class="fc" id="L609">      return &quot;ACCEPTED,&quot; + proposalId + &quot;,&quot; + value;</span>
+<span class="fc" id="L614">      return &quot;ACCEPTED,&quot; + proposalId + &quot;,&quot; + value;</span>
     }
 
-<span class="fc" id="L612">    System.out.printf(&quot;[SERVER %d] -&gt; REJECT (promised=%d)%n&quot;, port, promisedProposal);</span>
+<span class="fc" id="L617">    log.info(&quot;[SERVER {}] -&gt; REJECT (promised={})%n&quot;, port, promisedProposal);</span>
 
-<span class="fc" id="L614">    return &quot;REJECT,&quot; + proposalId + &quot;,&quot; + value;</span>
+<span class="fc" id="L619">    return &quot;REJECT,&quot; + proposalId + &quot;,&quot; + value;</span>
   }
 
 
@@ -621,10 +626,10 @@ public class PaxosServer {
    * @return tekstowa reprezentacja stanu Paxosa
    */
   public synchronized String state() {
-<span class="pc bpc" id="L624" title="1 of 2 branches missed.">    if (stuck) {</span>
-<span class="nc" id="L625">      return stuckMessage;</span>
+<span class="pc bpc" id="L629" title="1 of 2 branches missed.">    if (stuck) {</span>
+<span class="nc" id="L630">      return stuckMessage;</span>
     }
-<span class="fc" id="L627">    return &quot;STATE,&quot; + promisedProposal + &quot;,&quot; + acceptedProposal + &quot;,&quot; + acceptedValue;</span>
+<span class="fc" id="L632">    return &quot;STATE,&quot; + promisedProposal + &quot;,&quot; + acceptedProposal + &quot;,&quot; + acceptedValue;</span>
   }
 
 
@@ -632,17 +637,17 @@ public class PaxosServer {
    * Czysci caly lokalny stan serwera.
    */
   public synchronized void clear() {
-<span class="fc" id="L635">    promisedProposal = -1;</span>
-<span class="fc" id="L636">    acceptedProposal = -1;</span>
-<span class="fc" id="L637">    acceptedValue = -1;</span>
+<span class="fc" id="L640">    promisedProposal = -1;</span>
+<span class="fc" id="L641">    acceptedProposal = -1;</span>
+<span class="fc" id="L642">    acceptedValue = -1;</span>
 
-<span class="fc" id="L639">    prevPromisedProposal = -1;</span>
-<span class="fc" id="L640">    prevAcceptedProposal = -1;</span>
-<span class="fc" id="L641">    prevAcceptedValue = -1;</span>
+<span class="fc" id="L644">    prevPromisedProposal = -1;</span>
+<span class="fc" id="L645">    prevAcceptedProposal = -1;</span>
+<span class="fc" id="L646">    prevAcceptedValue = -1;</span>
 
-<span class="fc" id="L643">    System.out.printf(&quot;[SERVER %d] Wyczyszczono dane %n&quot;, port);</span>
+<span class="fc" id="L648">    log.info(&quot;[SERVER {}] Wyczyszczono dane %n&quot;, port);</span>
 
-<span class="fc" id="L645">  }</span>
+<span class="fc" id="L650">  }</span>
 
   /**
    * Zbiera liste aktualnie dostepnych serwerow.
@@ -650,13 +655,13 @@ public class PaxosServer {
    * @return lista adresow serwerow odpowiadajacych na zapytania
    */
   private List&lt;String&gt; collectAlive() {
-<span class="fc" id="L653">    List&lt;String&gt; list = new ArrayList&lt;&gt;();</span>
-<span class="fc bfc" id="L654" title="All 2 branches covered.">    for (String s : SERVERS) {</span>
-<span class="fc bfc" id="L655" title="All 2 branches covered.">      if (isAlive(s)) {</span>
-<span class="fc" id="L656">        list.add(s);</span>
+<span class="fc" id="L658">    List&lt;String&gt; list = new ArrayList&lt;&gt;();</span>
+<span class="fc bfc" id="L659" title="All 2 branches covered.">    for (String s : SERVERS) {</span>
+<span class="fc bfc" id="L660" title="All 2 branches covered.">      if (isAlive(s)) {</span>
+<span class="fc" id="L661">        list.add(s);</span>
       }
-<span class="fc" id="L658">    }</span>
-<span class="fc" id="L659">    return list;</span>
+<span class="fc" id="L663">    }</span>
+<span class="fc" id="L664">    return list;</span>
   }
 
 }

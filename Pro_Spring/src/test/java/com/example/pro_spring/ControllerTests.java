@@ -185,7 +185,7 @@ class ControllerTests {
 
 
     @Test
-    @DisplayName("/clearall – resp == null NIE zwiększa licznika")
+    @DisplayName("/clearall – resp == null NIE zwieksza licznika")
     void clearAllCountsNullResponses() throws Exception {
       when(server.isStuck()).thenReturn(false);
       when(server.getPort()).thenReturn(8000);

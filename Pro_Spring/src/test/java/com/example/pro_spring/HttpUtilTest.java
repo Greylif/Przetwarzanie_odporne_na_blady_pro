@@ -44,20 +44,19 @@ class HttpUtilTest {
   }
 
   @Test
-  @DisplayName("postParams – rzuca HttpUtilException")
-  void postParamsException() {
+  @DisplayName("postParams – zwraca null przy bledzie HTTP")
+  void postParamsReturnsNullOnError() {
 
     mockServer.expect(requestTo("http://fail/url"))
         .andExpect(method(HttpMethod.POST))
         .andRespond(withServerError());
 
-    assertThatThrownBy(() -> HttpUtil.postParams("http://fail/url"))
-        .isInstanceOf(HttpUtilException.class)
-        .hasMessageContaining("HTTP communication failed for URL: http://fail/url");
+    String result = HttpUtil.postParams("http://fail/url");
+
+    assertThat(result).isNull();
 
     mockServer.verify();
   }
-
 
 
   @Test

@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import lombok.Getter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -56,6 +58,8 @@ public class PaxosServer {
   @Getter
   private volatile String stuckMessage = "STUCK";
 
+  private static final Logger log = LoggerFactory.getLogger(PaxosServer.class);
+
   private static final String LOCALHOST = "http://localhost:";
 
   /**
@@ -77,7 +81,7 @@ public class PaxosServer {
     this.ctx = ctx;
     setLeaderPort(leader);
 
-    System.out.printf(" SERVER %d Wlaczony na porcie %d (leader=%d) %n", id, port, leaderPort);
+    log.info(" SERVER {} Wlaczony na porcie {} (leader={}) %n", id, port, leaderPort);
   }
 
   /**
@@ -95,7 +99,7 @@ public class PaxosServer {
       return;
     }
 
-    System.out.printf("LEADER CHANGE: %d -> %d%n", leaderPort, p);
+    log.info("LEADER CHANGE: {} -> {}%n", leaderPort, p);
     leaderPort = p;
   }
 
@@ -109,10 +113,11 @@ public class PaxosServer {
     try {
       String resp = HttpUtil.postParams(url + "/accepted_state");
       return resp != null && resp.startsWith("STATE");
-    } catch (ServerException e) {
+    } catch (Exception e) {
       return false;
     }
   }
+
 
   private Integer discoverLeaderFromCluster() {
 
@@ -138,7 +143,7 @@ public class PaxosServer {
         }
 
       } catch (ServerException e) {
-        System.out.printf("[SERVER %d] %s niedostepny%n", port, s);
+        log.info("[SERVER {}] {} niedostepny%n", port, s);
       }
     }
 
@@ -146,7 +151,7 @@ public class PaxosServer {
   }
 
   /**
-   * Przy starcie programu wykrywa czy już został ustalony lider, jeżeli nie rozpoczona elekcję.
+   * Przy starcie programu wykrywa czy juz zostal ustalony lider, jezeli nie rozpoczona elekcje.
    */
   @PostConstruct
   public void discoverLeaderOnStartup() {
@@ -156,8 +161,8 @@ public class PaxosServer {
 
       if (discovered != null) {
         setLeaderPort(discovered);
-        System.out.printf(
-            "[SERVER %d] Odkryto istniejacego lidera: %d%n",
+        log.info(
+            "[SERVER {}] Odkryto istniejacego lidera: {}%n",
             port, discovered
         );
         return;
@@ -172,7 +177,7 @@ public class PaxosServer {
    */
   public synchronized void injectPromised(int x) {
     promisedProposal = x;
-    System.out.printf("[SERVER %d] INJECT promised=%d%n", port, x);
+    log.info("[SERVER {}] INJECT promised={}%n", port, x);
   }
 
   /**
@@ -180,7 +185,7 @@ public class PaxosServer {
    */
   public synchronized void injectAcceptedProposal(int x) {
     acceptedProposal = x;
-    System.out.printf("[SERVER %d] INJECT acceptedProposal=%d%n", port, x);
+    log.info("[SERVER {}] INJECT acceptedProposal={}%n", port, x);
   }
 
   /**
@@ -188,7 +193,7 @@ public class PaxosServer {
    */
   public synchronized void injectAcceptedValue(int x) {
     acceptedValue = x;
-    System.out.printf("[SERVER %d] INJECT acceptedValue=%d%n", port, x);
+    log.info("[SERVER {}] INJECT acceptedValue={}%n", port, x);
   }
 
   /**
@@ -204,7 +209,7 @@ public class PaxosServer {
     int leader = getLeaderPort();
 
     if (leader == -1) {
-      System.out.printf("[SERVER %d] Brak lidera – odkrywanie%n", port);
+      log.info("[SERVER {}] Brak lidera – odkrywanie%n", port);
       discoverLeaderOnRecovery();
       return;
     }
@@ -214,8 +219,8 @@ public class PaxosServer {
     }
 
     if (!isAlive(LOCALHOST + leader)) {
-      System.out.printf(
-          "[SERVER %d] Leader %d nie żyje – start elekcji%n",
+      log.info(
+          "[SERVER {}] Leader {} nie zyje – start elekcji%n",
           port, leader
       );
     }
@@ -264,19 +269,19 @@ public class PaxosServer {
         ports.add(p);
 
       } catch (NumberFormatException e) {
-        System.out.printf("[SERVER %d] %s jest STUCK (%s)%n", port, s, e.getMessage());
+        log.info("[SERVER {}] {} jest STUCK ({})%n", port, s, e.getMessage());
       }
     }
 
     if (ports.isEmpty()) {
-      System.out.printf("[SERVER %d] Brak kandydatow na lidera%n", port);
+      log.info("[SERVER {}] Brak kandydatow na lidera%n", port);
       return;
     }
 
     int winner = ports.stream().min(Integer::compare).orElse(port);
     setLeaderPort(winner);
 
-    System.out.printf("[SERVER %d] Nowy leader wybrany = %d%n", port, winner);
+    log.info("[SERVER {}] Nowy leader wybrany = {}%n", port, winner);
   }
 
 
@@ -285,7 +290,7 @@ public class PaxosServer {
    */
   public void crash() {
     running = false;
-    System.out.printf("[SERVER %d] Crash za 300ms%n", port);
+    log.info("[SERVER {}] Crash za 300ms%n", port);
 
     new Thread(() -> {
       try {
@@ -320,7 +325,7 @@ public class PaxosServer {
     promisedProposal = prevPromisedProposal;
     acceptedProposal = prevAcceptedProposal;
     acceptedValue = prevAcceptedValue;
-    System.out.printf("[SERVER %d] ROLLBACK -> (%d,%d,%d)%n", port, promisedProposal,
+    log.info("[SERVER {}] ROLLBACK -> ({},{},{})%n", port, promisedProposal,
         acceptedProposal, acceptedValue);
   }
 
@@ -333,7 +338,7 @@ public class PaxosServer {
     for (String s : servers) {
       executor.submit(() -> {
         String resp = HttpUtil.postParams(s + "/rollback");
-        System.out.printf("[LIDER %d] -> ROLLBACK wyslany do %s => %s%n", port, s, resp);
+        log.info("[LIDER {}] -> ROLLBACK wyslany do {} => {}%n", port, s, resp);
       });
     }
   }
@@ -346,7 +351,7 @@ public class PaxosServer {
   public synchronized void stuck(String message) {
     this.stuck = true;
     this.stuckMessage = message;
-    System.out.printf("[SERVER %d] Serwer zaciety z wiadomoscia: %s%n", port, message);
+    log.info("[SERVER {}] Serwer zaciety z wiadomoscia: {}%n", port, message);
   }
 
 
@@ -358,7 +363,7 @@ public class PaxosServer {
     this.stuckMessage = null;
     setLeaderPort(-1);
     executor.submit(this::discoverLeaderOnRecovery);
-    System.out.printf("[SERVER %d] Serwer wraca do normalnego dzialania: %n", port);
+    log.info("[SERVER {}] Serwer wraca do normalnego dzialania: %n", port);
   }
 
 
@@ -377,7 +382,7 @@ public class PaxosServer {
     for (String s : alive) {
       executor.submit(() -> {
         try {
-          System.out.printf("[LIDER %d] -> PREPARE do %s%n", port, s);
+          log.info("[LIDER {}] -> PREPARE do {}%n", port, s);
           String resp = HttpUtil.postParams(
               s + "/prepare?proposalId=" + proposalId);
 
@@ -403,7 +408,7 @@ public class PaxosServer {
       Thread.currentThread().interrupt();
     }
 
-    System.out.printf("[LIDER %d] Otrzymane PROMISE: %s%n",
+    log.info("[LIDER {}] Otrzymane PROMISE: {}%n",
         port,
         promises.stream()
             .map(p -> "(" + p.acceptedProposal() + "," + p.acceptedValue() + ")")
@@ -454,7 +459,7 @@ public class PaxosServer {
     for (String s : alive) {
       executor.submit(() -> {
         try {
-          System.out.printf("[LIDER %d] -> ACCEPT do %s, %d%n", port, s, value);
+          log.info("[LIDER {}] -> ACCEPT do {}, {}%n", port, s, value);
           String resp = HttpUtil.postParams(
               s + "/accept?proposalId=" + proposalId + "&value=" + value);
 
@@ -473,7 +478,7 @@ public class PaxosServer {
       Thread.currentThread().interrupt();
     }
 
-    System.out.printf("[LIDER %d] Ilosc ACCEPT = %d%n",
+    log.info("[LIDER {}] Ilosc ACCEPT = {}%n",
         port, accepts.size());
 
     return accepts.size();
@@ -489,23 +494,23 @@ public class PaxosServer {
 
     long proposalId = (System.currentTimeMillis() & 0xFFFFFFF) + id;
 
-    System.out.printf("%n[LIDER %d] Poczatek rundy paxosa%n", port);
-    System.out.printf("[LIDER %d] proposalId=%d, clientValue=%d%n",
+    log.info("%n[LIDER {}] Poczatek rundy paxosa%n", port);
+    log.info("[LIDER {}] proposalId={}, clientValue={}%n",
         port, proposalId, clientValue);
 
     List<String> alive = collectAlive();
-    System.out.printf("[LIDER %d] Dzialajace serwery (%d): %s%n",
+    log.info("[LIDER {}] Dzialajace serwery ({}): {}%n",
         port, alive.size(), alive);
 
     if (alive.isEmpty()) {
-      System.out.printf("[LIDER %d] Brak zywych serwerow - koniec%n", port);
+      log.info("[LIDER {}] Brak zywych serwerow - koniec%n", port);
       return;
     }
 
     List<Promise> promises = preparePhase(alive, proposalId);
 
     if (promises.size() < MAJORITY) {
-      System.out.printf("[LIDER %d] Brak wiekszosci w PREPARE (%d/%d) — ROLLBACK%n",
+      log.info("[LIDER {}] Brak wiekszosci w PREPARE ({}/{}) — ROLLBACK%n",
           port, promises.size(), MAJORITY);
       rollbackAll(alive);
       return;
@@ -513,19 +518,19 @@ public class PaxosServer {
 
     Integer chosenValue = chooseValueFromPromises(promises, clientValue);
     if (chosenValue == null) {
-      System.out.printf("[LIDER %d] Brak wiekszosci na zadna wartosc — ROLLBACK%n", port);
+      log.info("[LIDER {}] Brak wiekszosci na zadna wartosc — ROLLBACK%n", port);
       rollbackAll(alive);
       return;
     }
 
-    System.out.printf("[LIDER %d] Ustalona wartosc = %d%n", port, chosenValue);
+    log.info("[LIDER {}] Ustalona wartosc = {}%n", port, chosenValue);
 
     int acceptedCount = acceptPhase(alive, proposalId, chosenValue);
 
     if (acceptedCount >= MAJORITY) {
-      System.out.printf("[LIDER %d] Finalna, ustalona wartosc = %d%n", port, chosenValue);
+      log.info("[LIDER {}] Finalna, ustalona wartosc = {}%n", port, chosenValue);
     } else {
-      System.out.printf("[LIDER %d] Brak wiekszosci w ACCEPT — ROLLBACK%n", port);
+      log.info("[LIDER {}] Brak wiekszosci w ACCEPT — ROLLBACK%n", port);
       rollbackAll(alive);
     }
   }
@@ -545,10 +550,10 @@ public class PaxosServer {
       return null;
     }
 
-    System.out.printf("[SERVER %d] <- PREPARE proposalId=%d%n", port, proposalId);
+    log.info("[SERVER {}] <- PREPARE proposalId={}%n", port, proposalId);
 
     if (Math.random() < FAIL_CHANCE) {
-      System.out.printf("[SERVER %d] Brak odpowiedzi - symulacja awarii komunikacji w PREPARE %n",
+      log.info("[SERVER {}] Brak odpowiedzi - symulacja awarii komunikacji w PREPARE %n",
           port);
       return null;
     }
@@ -556,7 +561,7 @@ public class PaxosServer {
     if (proposalId > promisedProposal) {
       savePrevState();
 
-      System.out.printf("[SERVER %d] -> PROMISE (accepted=(%d,%d))%n", port, acceptedProposal,
+      log.info("[SERVER {}] -> PROMISE (accepted=({},{}))%n", port, acceptedProposal,
           acceptedValue);
 
       promisedProposal = (int) proposalId;
@@ -568,7 +573,7 @@ public class PaxosServer {
       }
     }
 
-    System.out.printf("[SERVER %d] -> REJECT (promised=%d)%n", port, promisedProposal);
+    log.info("[SERVER {}] -> REJECT (promised={})%n", port, promisedProposal);
 
     return "REJECT";
   }
@@ -590,12 +595,12 @@ public class PaxosServer {
     }
 
     if (Math.random() < FAIL_CHANCE) {
-      System.out.printf("[SERVER %d] Brak odpowiedzi - symulacja awarii komunikacji w ACCEPT %n",
+      log.info("[SERVER {}] Brak odpowiedzi - symulacja awarii komunikacji w ACCEPT %n",
           port);
       return null;
     }
 
-    System.out.printf("[SERVER %d] <- ACCEPT proposalId=%d value=%d%n", port, proposalId, value);
+    log.info("[SERVER {}] <- ACCEPT proposalId={} value={}%n", port, proposalId, value);
 
     if (proposalId >= promisedProposal) {
       savePrevState();
@@ -604,12 +609,12 @@ public class PaxosServer {
       acceptedProposal = (int) proposalId;
       acceptedValue = value;
 
-      System.out.printf("[SERVER %d] -> ACCEPTED (%d,%d)%n", port, acceptedProposal, acceptedValue);
+      log.info("[SERVER {}] -> ACCEPTED ({},{})%n", port, acceptedProposal, acceptedValue);
 
       return "ACCEPTED," + proposalId + "," + value;
     }
 
-    System.out.printf("[SERVER %d] -> REJECT (promised=%d)%n", port, promisedProposal);
+    log.info("[SERVER {}] -> REJECT (promised={})%n", port, promisedProposal);
 
     return "REJECT," + proposalId + "," + value;
   }
@@ -640,7 +645,7 @@ public class PaxosServer {
     prevAcceptedProposal = -1;
     prevAcceptedValue = -1;
 
-    System.out.printf("[SERVER %d] Wyczyszczono dane %n", port);
+    log.info("[SERVER {}] Wyczyszczono dane %n", port);
 
   }
 

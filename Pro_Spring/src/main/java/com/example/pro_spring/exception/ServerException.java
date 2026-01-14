@@ -1,24 +1,24 @@
 package com.example.pro_spring.exception;
 
 /**
- * Wyjątek reprezentujący błąd po stronie serwera.
+ * Wyjatek reprezentujacy blad po stronie serwera.
  */
 public class ServerException extends RuntimeException {
 
   /**
-   * Tworzy nowy wyjątek serwera z podaną wiadomością.
+   * Tworzy nowy wyjatek serwera z podana wiadomoscia.
    *
-   * @param message opis błędu
+   * @param message opis bledu
    */
   public ServerException(String message) {
     super(message);
   }
 
   /**
-   * Tworzy nowy wyjątek serwera z wiadomością oraz pierwotną przyczyną.
+   * Tworzy nowy wyjatek serwera z wiadomoscia oraz pierwotna przyczyna.
    *
-   * @param message opis błędu
-   * @param cause oryginalny wyjątek
+   * @param message opis bledu
+   * @param cause oryginalny wyjatek
    */
   public ServerException(String message, Throwable cause) {
     super(message, cause);

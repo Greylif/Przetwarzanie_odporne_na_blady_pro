@@ -1,9 +1,9 @@
 GROUP,PACKAGE,CLASS,INSTRUCTION_MISSED,INSTRUCTION_COVERED,BRANCH_MISSED,BRANCH_COVERED,LINE_MISSED,LINE_COVERED,COMPLEXITY_MISSED,COMPLEXITY_COVERED,METHOD_MISSED,METHOD_COVERED
-Pro_Spring,com.example.pro_spring.util,HttpUtil,0,46,0,0,0,10,0,3,0,3
+Pro_Spring,com.example.pro_spring.util,HttpUtil,0,41,0,0,0,11,0,3,0,3
 Pro_Spring,com.example.pro_spring,ProSpringApplication,0,8,0,0,0,3,0,2,0,2
 Pro_Spring,com.example.pro_spring.controller,PaxosController,0,234,0,34,0,61,0,31,0,14
 Pro_Spring,com.example.pro_spring.model,Promise,0,12,0,0,0,1,0,1,0,1
-Pro_Spring,com.example.pro_spring.service,PaxosServer,170,1307,24,80,38,243,23,65,0,36
+Pro_Spring,com.example.pro_spring.service,PaxosServer,116,1134,24,80,38,244,23,65,0,36
 Pro_Spring,com.example.pro_spring.exception,HttpUtilException,0,9,0,0,0,4,0,2,0,2
 Pro_Spring,com.example.pro_spring.exception,ServerException,0,9,0,0,0,4,0,2,0,2
 Pro_Spring,com.example.pro_spring.exception,GlobalExceptionHandler,0,42,0,0,0,10,0,4,0,4

@@ -1,6 +1,5 @@
 package com.example.pro_spring.util;
 
-import com.example.pro_spring.exception.HttpUtilException;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -38,11 +37,13 @@ public class HttpUtil {
       headers.setContentType(MediaType.TEXT_PLAIN);
       HttpEntity<String> entity = new HttpEntity<>("", headers);
 
-      ResponseEntity<String> resp = rest.exchange(url, HttpMethod.POST, entity, String.class);
+      ResponseEntity<String> resp =
+          rest.exchange(url, HttpMethod.POST, entity, String.class);
       return resp.getBody();
 
     } catch (RestClientException e) {
-      throw new HttpUtilException("HTTP communication failed for URL: " + url, e);
+      return null;
     }
   }
+
 }

@@ -1,7 +1,6 @@
 package com.example.paxosgui;
 
 import javafx.application.Application;
-import javafx.scene.control.TextField;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;

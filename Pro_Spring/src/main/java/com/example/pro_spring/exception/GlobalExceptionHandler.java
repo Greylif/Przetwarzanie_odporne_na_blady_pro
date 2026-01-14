@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 
 /**
- * Globalny handler wyjątków
+ * Globalny handler wyjatkow.
  */
 @ControllerAdvice
 public class GlobalExceptionHandler {
@@ -19,11 +19,11 @@ public class GlobalExceptionHandler {
   private static final String ERROR = "error";
 
   /**
-   * Obsługuje wyjątki HttpUtilException.
+   * Obsluguje wyjatki HttpUtilException.
    *
-   * @param ex wyjątek klienta
+   * @param ex wyjatek klienta
    * @param model model widoku
-   * @return nazwa widoku błędu
+   * @return nazwa widoku bledu
    */
   @ExceptionHandler(HttpUtilException.class)
   @ResponseStatus(HttpStatus.BAD_REQUEST)
@@ -34,11 +34,11 @@ public class GlobalExceptionHandler {
   }
 
   /**
-   * Obsługuje wyjątki typu ServerException.
+   * Obsluguje wyjatki typu ServerException.
    *
-   * @param ex wyjątek serwera
+   * @param ex wyjatek serwera
    * @param model model widoku
-   * @return nazwa widoku błędu
+   * @return nazwa widoku bledu
    */
   @ExceptionHandler(ServerException.class)
   @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -49,11 +49,11 @@ public class GlobalExceptionHandler {
   }
 
   /**
-   * Obsługuje wszystkie nieprzewidziane wyjątki.
+   * Obsluguje wszystkie nieprzewidziane wyjatki.
    *
-   * @param ex dowolny wyjątek
+   * @param ex dowolny wyjatek
    * @param model model widoku
-   * @return nazwa widoku błędu
+   * @return nazwa widoku bledu
    */
   @ExceptionHandler(Exception.class)
   @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
